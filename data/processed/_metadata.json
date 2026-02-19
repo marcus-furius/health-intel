@@ -1,0 +1,12 @@
+{
+  "transformed_at": "2026-02-19T21:26:19.958348",
+  "record_counts": {
+    "sleep": 355,
+    "readiness": 355,
+    "activity": 364,
+    "heartrate": 2,
+    "spo2": 347,
+    "workouts": 2734,
+    "body_composition": 37
+  }
+}

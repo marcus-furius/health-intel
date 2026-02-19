@@ -1,0 +1,952 @@
+"""Markdown report generation with embedded base64 PNG charts — multi-source."""
+
+import base64
+import io
+import logging
+from datetime import datetime
+from pathlib import Path
+from typing import Any
+
+import matplotlib
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt
+import matplotlib.dates as mdates
+import pandas as pd
+
+logger = logging.getLogger(__name__)
+
+plt.rcParams.update({
+    "figure.figsize": (10, 4),
+    "figure.dpi": 120,
+    "axes.spines.top": False,
+    "axes.spines.right": False,
+    "axes.grid": False,
+    "font.size": 10,
+})
+
+
+def _fig_to_base64(fig: plt.Figure) -> str:
+    buf = io.BytesIO()
+    fig.savefig(buf, format="png", bbox_inches="tight", facecolor="white")
+    plt.close(fig)
+    buf.seek(0)
+    return base64.b64encode(buf.read()).decode("utf-8")
+
+
+def _embed_chart(fig: plt.Figure, alt_text: str = "chart") -> str:
+    encoded = _fig_to_base64(fig)
+    return f"![{alt_text}](data:image/png;base64,{encoded})"
+
+
+def _weekly_resample(df: pd.DataFrame, date_col: str, value_col: str) -> pd.DataFrame:
+    temp = df[[date_col, value_col]].dropna().copy()
+    temp = temp.set_index(date_col)
+    weekly = temp.resample("W").mean().dropna().reset_index()
+    return weekly
+
+
+def _corr_strength(corr: float | None) -> str:
+    if corr is None:
+        return "insufficient data"
+    abs_c = abs(corr)
+    if abs_c > 0.6:
+        return "strong"
+    if abs_c > 0.3:
+        return "moderate"
+    return "weak"
+
+
+# ── Nutrition Section (MFP) ──
+
+def _nutrition_section(datasets: dict[str, pd.DataFrame]) -> str:
+    lines = ["## Nutrition (MyFitnessPal)", ""]
+    nutr_df = datasets.get("nutrition", pd.DataFrame())
+    body_comp_df = datasets.get("body_composition", pd.DataFrame())
+
+    if nutr_df.empty:
+        lines.append("*No MyFitnessPal data available for this period.*\n")
+        return "\n".join(lines)
+
+    # Logging compliance
+    logged_days = (nutr_df["calories"] > 0).sum() if "calories" in nutr_df.columns else 0
+    total_days = len(nutr_df)
+    compliance = logged_days / total_days * 100 if total_days > 0 else 0
+    lines.append(f"**Nutrition Logging Compliance:** {logged_days}/{total_days} days ({compliance:.0f}%)\n")
+
+    # Filter to logged days for averages
+    logged = nutr_df[nutr_df["calories"] > 0] if "calories" in nutr_df.columns else nutr_df
+
+    if "calories" in logged.columns and not logged.empty:
+        avg_cal = logged["calories"].mean()
+        lines.append(f"**Average Daily Calories:** {avg_cal:,.0f} kcal\n")
+
+    # Macro split
+    macro_cols = {"protein": "Protein", "carbohydrates": "Carbs", "fat": "Fat"}
+    available_macros = {k: v for k, v in macro_cols.items() if k in logged.columns}
+    if available_macros and not logged.empty:
+        macro_avgs = {label: logged[col].mean() for col, label in available_macros.items()}
+        total_macro_g = sum(macro_avgs.values())
+        lines.append("**Average Daily Macros:**\n")
+        for label, avg_g in macro_avgs.items():
+            cal_factor = 4 if label != "Fat" else 9
+            pct = (avg_g * cal_factor) / (avg_cal) * 100 if avg_cal > 0 else 0
+            lines.append(f"- {label}: {avg_g:.0f}g ({pct:.0f}%)")
+        lines.append("")
+
+        # Protein per kg bodyweight
+        if "protein" in logged.columns and not body_comp_df.empty and "weight_kg" in body_comp_df.columns:
+            latest_weight = body_comp_df.sort_values("day")["weight_kg"].iloc[-1]
+            protein_per_kg = logged["protein"].mean() / latest_weight
+            target_status = "within" if 1.6 <= protein_per_kg <= 2.2 else "below" if protein_per_kg < 1.6 else "above"
+            lines.append(f"**Protein per kg bodyweight:** {protein_per_kg:.1f} g/kg ({target_status} 1.6–2.2g/kg target)\n")
+
+    # Calorie trend chart
+    if "calories" in nutr_df.columns and "day" in nutr_df.columns:
+        weekly = _weekly_resample(nutr_df[nutr_df["calories"] > 0], "day", "calories")
+        if len(weekly) > 1:
+            fig, ax = plt.subplots()
+            ax.plot(weekly["day"], weekly["calories"], marker="o", markersize=3, linewidth=1.5, color="#E8915A")
+            ax.set_ylabel("Calories (kcal)")
+            ax.set_title("Weekly Average Daily Calories")
+            ax.xaxis.set_major_formatter(mdates.DateFormatter("%b %Y"))
+            ax.xaxis.set_major_locator(mdates.MonthLocator(interval=2))
+            fig.autofmt_xdate()
+            lines.append(_embed_chart(fig, "Weekly Calorie Trend"))
+            lines.append("")
+
+    # Surplus/deficit estimate
+    activity_df = datasets.get("activity", pd.DataFrame())
+    if not logged.empty and not body_comp_df.empty and not activity_df.empty:
+        if "calories" in logged.columns and "bmr" in body_comp_df.columns:
+            latest_bmr = body_comp_df.sort_values("day")["bmr"].iloc[-1]
+            active_cal_col = next((c for c in ["active_calories"] if c in activity_df.columns), None)
+            if active_cal_col:
+                avg_active = activity_df[active_cal_col].mean()
+                avg_intake = logged["calories"].mean()
+                tdee_est = latest_bmr + avg_active
+                balance = avg_intake - tdee_est
+                status = "surplus" if balance > 0 else "deficit"
+                lines.append(f"**Estimated Daily Caloric Balance:** {balance:+,.0f} kcal ({status})")
+                lines.append(f"*(Based on BMR {latest_bmr:.0f} + avg active calories {avg_active:.0f} = ~{tdee_est:.0f} TDEE)*\n")
+
+    return "\n".join(lines)
+
+
+# ── Sleep & Recovery Section (Oura) ──
+
+def _sleep_recovery_section(datasets: dict[str, pd.DataFrame]) -> str:
+    lines = ["## Sleep & Recovery (Oura Ring)", ""]
+    sleep_df = datasets.get("sleep", pd.DataFrame())
+    readiness_df = datasets.get("readiness", pd.DataFrame())
+
+    if sleep_df.empty and readiness_df.empty:
+        lines.append("*No Oura sleep/readiness data available for this period.*\n")
+        return "\n".join(lines)
+
+    # Sleep score
+    score_col = "score" if not sleep_df.empty and "score" in sleep_df.columns else None
+    if score_col:
+        avg_score = sleep_df[score_col].mean()
+        lines.append(f"**Average Sleep Score:** {avg_score:.0f}\n")
+
+        weekly = _weekly_resample(sleep_df, "day", score_col)
+        if len(weekly) > 1:
+            fig, ax = plt.subplots()
+            ax.plot(weekly["day"], weekly[score_col], marker="o", markersize=3, linewidth=1.5, color="#4A90D9")
+            ax.set_ylabel("Sleep Score")
+            ax.set_title("Weekly Average Sleep Score")
+            ax.xaxis.set_major_formatter(mdates.DateFormatter("%b %Y"))
+            ax.xaxis.set_major_locator(mdates.MonthLocator(interval=2))
+            fig.autofmt_xdate()
+            lines.append(_embed_chart(fig, "Weekly Sleep Score Trend"))
+            lines.append("")
+            trend = "improving" if weekly[score_col].iloc[-1] > weekly[score_col].iloc[0] else "declining"
+            lines.append(f"Sleep scores have been **{trend}** over the period, ranging from "
+                         f"{weekly[score_col].min():.0f} to {weekly[score_col].max():.0f} weekly average.\n")
+
+    # Sleep stage breakdown
+    stage_cols = {c: c for c in sleep_df.columns
+                  if any(k in c.lower() for k in ["rem", "deep", "light"]) and "duration" in c.lower()
+                  } if not sleep_df.empty else {}
+    if stage_cols:
+        stage_means = {n: sleep_df[c].dropna().mean() / 3600 for n, c in stage_cols.items()}
+        if any(v > 0 for v in stage_means.values()):
+            fig, ax = plt.subplots()
+            labels = [c.replace("_", " ").title() for c in stage_means]
+            values = list(stage_means.values())
+            ax.bar(labels, values, color=["#5B8BD9", "#2D5F91", "#A8C8F0"][:len(labels)])
+            ax.set_ylabel("Hours")
+            ax.set_title("Average Sleep Stage Duration")
+            lines.append(_embed_chart(fig, "Sleep Stage Breakdown"))
+            lines.append("\nAverage nightly time spent in each sleep stage.\n")
+
+    # Readiness
+    readiness_col = "score" if not readiness_df.empty and "score" in readiness_df.columns else None
+    if readiness_col:
+        avg_readiness = readiness_df[readiness_col].mean()
+        lines.append(f"**Average Readiness Score:** {avg_readiness:.0f}\n")
+
+        weekly = _weekly_resample(readiness_df, "day", readiness_col)
+        if len(weekly) > 1:
+            fig, ax = plt.subplots()
+            ax.plot(weekly["day"], weekly[readiness_col], marker="o", markersize=3, linewidth=1.5, color="#50B88E")
+            ax.set_ylabel("Readiness Score")
+            ax.set_title("Weekly Average Readiness Score")
+            ax.xaxis.set_major_formatter(mdates.DateFormatter("%b %Y"))
+            ax.xaxis.set_major_locator(mdates.MonthLocator(interval=2))
+            fig.autofmt_xdate()
+            lines.append(_embed_chart(fig, "Weekly Readiness Trend"))
+            lines.append("")
+
+    # HRV trend
+    if not readiness_df.empty:
+        hrv_col = next((c for c in ["contributors.hrv_balance", "hrv_balance"] if c in readiness_df.columns), None)
+        if hrv_col:
+            weekly_hrv = _weekly_resample(readiness_df, "day", hrv_col)
+            if len(weekly_hrv) > 1:
+                fig, ax = plt.subplots()
+                ax.plot(weekly_hrv["day"], weekly_hrv[hrv_col], marker="o", markersize=3, linewidth=1.5, color="#E8915A")
+                ax.set_ylabel("HRV Balance")
+                ax.set_title("Weekly HRV Balance Trend")
+                ax.xaxis.set_major_formatter(mdates.DateFormatter("%b %Y"))
+                ax.xaxis.set_major_locator(mdates.MonthLocator(interval=2))
+                fig.autofmt_xdate()
+                lines.append(_embed_chart(fig, "Weekly HRV Trend"))
+                lines.append("\nHRV balance reflects heart rate variability relative to your personal baseline.\n")
+
+    # Recovery patterns
+    if readiness_col:
+        high = (readiness_df[readiness_col] >= 80).sum()
+        low = (readiness_df[readiness_col] < 60).sum()
+        total = len(readiness_df)
+        lines.append(f"**Recovery patterns:** {high} high-readiness days ({high/total*100:.0f}%), "
+                     f"{low} low-readiness days ({low/total*100:.0f}%) out of {total} total.\n")
+
+    return "\n".join(lines)
+
+
+# ── Training Section (Hevy) ──
+
+def _training_section(datasets: dict[str, pd.DataFrame]) -> str:
+    lines = ["## Training (Hevy)", ""]
+    workouts_df = datasets.get("workouts", pd.DataFrame())
+
+    if workouts_df.empty:
+        lines.append("*No Hevy workout data available for this period.*\n")
+        return "\n".join(lines)
+
+    # Session count and frequency
+    sessions = workouts_df.groupby("day").first().reset_index()
+    num_sessions = len(sessions)
+    if num_sessions > 0:
+        date_range_days = (sessions["day"].max() - sessions["day"].min()).days or 1
+        weeks = max(date_range_days / 7, 1)
+        sessions_per_week = num_sessions / weeks
+        lines.append(f"**Total Sessions:** {num_sessions} ({sessions_per_week:.1f}/week)\n")
+
+    # Weekly volume trend
+    weekly_volume = workouts_df.groupby("day")["volume"].sum().reset_index()
+    weekly_volume = weekly_volume.set_index("day").resample("W").sum().reset_index()
+    weekly_volume = weekly_volume[weekly_volume["volume"] > 0]
+
+    if len(weekly_volume) > 1:
+        fig, ax = plt.subplots()
+        ax.bar(weekly_volume["day"], weekly_volume["volume"], width=5, color="#7A6FBE", alpha=0.8)
+        ax.set_ylabel("Volume (kg)")
+        ax.set_title("Weekly Training Volume")
+        ax.xaxis.set_major_formatter(mdates.DateFormatter("%b %Y"))
+        ax.xaxis.set_major_locator(mdates.MonthLocator(interval=2))
+        fig.autofmt_xdate()
+        lines.append(_embed_chart(fig, "Weekly Training Volume"))
+        lines.append("")
+
+        first_half = weekly_volume["volume"].iloc[:len(weekly_volume)//2].mean()
+        second_half = weekly_volume["volume"].iloc[len(weekly_volume)//2:].mean()
+        if second_half > first_half:
+            lines.append(f"Training volume has **increased** — first half avg {first_half:,.0f} kg/week "
+                         f"vs second half avg {second_half:,.0f} kg/week, indicating progressive overload.\n")
+        else:
+            lines.append(f"Training volume has been **stable or declining** — first half avg {first_half:,.0f} kg/week "
+                         f"vs second half avg {second_half:,.0f} kg/week.\n")
+
+    # Muscle group distribution
+    if "muscle_group" in workouts_df.columns:
+        muscle_volumes = workouts_df.groupby("muscle_group")["volume"].sum().sort_values(ascending=False)
+        muscle_volumes = muscle_volumes[muscle_volumes > 0].head(10)
+        if not muscle_volumes.empty:
+            fig, ax = plt.subplots(figsize=(10, 5))
+            ax.barh(muscle_volumes.index[::-1], muscle_volumes.values[::-1], color="#5B8BD9")
+            ax.set_xlabel("Total Volume (kg)")
+            ax.set_title("Volume by Muscle Group")
+            lines.append(_embed_chart(fig, "Muscle Group Distribution"))
+            lines.append("\nVolume distribution across muscle groups shows training emphasis.\n")
+
+    # Progressive overload — top exercises
+    if "exercise" in workouts_df.columns:
+        top_exercises = workouts_df.groupby("exercise")["volume"].sum().nlargest(5).index.tolist()
+        overload_notes: list[str] = []
+        for exercise_name in top_exercises:
+            ex_data = workouts_df[workouts_df["exercise"] == exercise_name].copy()
+            daily_max = ex_data.groupby("day")["weight_kg"].max().reset_index()
+            if len(daily_max) >= 3:
+                first_max = daily_max["weight_kg"].iloc[0]
+                last_max = daily_max["weight_kg"].iloc[-1]
+                if last_max > first_max:
+                    overload_notes.append(f"- **{exercise_name}**: {first_max:.1f} kg → {last_max:.1f} kg (+{last_max-first_max:.1f} kg)")
+                elif last_max == first_max:
+                    overload_notes.append(f"- **{exercise_name}**: maintained at {last_max:.1f} kg")
+        if overload_notes:
+            lines.append("**Progressive Overload (top exercises):**\n")
+            lines.extend(overload_notes)
+            lines.append("")
+
+    return "\n".join(lines)
+
+
+# ── Body Composition Section (Boditrax) ──
+
+def _body_composition_section(datasets: dict[str, pd.DataFrame]) -> str:
+    lines = ["## Body Composition (Boditrax)", ""]
+    body_df = datasets.get("body_composition", pd.DataFrame())
+
+    if body_df.empty:
+        lines.append("*No Boditrax scan data available for this period.*\n")
+        return "\n".join(lines)
+
+    latest = body_df.sort_values("day").iloc[-1]
+    lines.append(f"**Latest Scan:** {latest['day'].strftime('%Y-%m-%d') if hasattr(latest['day'], 'strftime') else latest['day']}\n")
+
+    metrics = [
+        ("weight_kg", "Weight", "kg"),
+        ("body_fat_pct", "Body Fat", "%"),
+        ("muscle_mass_kg", "Muscle Mass", "kg"),
+        ("water_mass_kg", "Water Mass", "kg"),
+        ("visceral_fat", "Visceral Fat", "rating"),
+        ("metabolic_age", "Metabolic Age", "years"),
+        ("bmr", "BMR", "kcal"),
+        ("bmi", "BMI", "kg/m²"),
+        ("phase_angle", "Phase Angle", "°"),
+    ]
+    for col, label, unit in metrics:
+        if col in latest.index and pd.notna(latest[col]):
+            lines.append(f"- **{label}:** {latest[col]:.1f} {unit}")
+    lines.append("")
+
+    # Trajectory chart if multiple scans
+    if len(body_df) >= 2:
+        plot_cols = [c for c in ["weight_kg", "body_fat_pct", "muscle_mass_kg"] if c in body_df.columns]
+        if plot_cols:
+            fig, axes = plt.subplots(1, len(plot_cols), figsize=(4*len(plot_cols), 4))
+            if len(plot_cols) == 1:
+                axes = [axes]
+            colors = ["#4A90D9", "#E8915A", "#50B88E"]
+            for idx, col in enumerate(plot_cols):
+                axes[idx].plot(body_df["day"], body_df[col], marker="o", color=colors[idx], linewidth=1.5)
+                axes[idx].set_title(col.replace("_", " ").title())
+                axes[idx].xaxis.set_major_formatter(mdates.DateFormatter("%b %y"))
+                fig.autofmt_xdate()
+            fig.suptitle("Body Composition Trajectory", y=1.02)
+            fig.tight_layout()
+            lines.append(_embed_chart(fig, "Body Composition Trajectory"))
+            lines.append("")
+
+        # Change since first scan
+        first = body_df.sort_values("day").iloc[0]
+        changes: list[str] = []
+        for col, label, unit in [("weight_kg", "Weight", "kg"), ("body_fat_pct", "Body Fat", "%"),
+                                  ("muscle_mass_kg", "Muscle Mass", "kg")]:
+            if col in body_df.columns and pd.notna(first.get(col)) and pd.notna(latest.get(col)):
+                delta = latest[col] - first[col]
+                changes.append(f"- **{label}:** {delta:+.1f} {unit}")
+        if changes:
+            lines.append("**Changes since first scan:**\n")
+            lines.extend(changes)
+            lines.append("")
+
+    return "\n".join(lines)
+
+
+# ── Activity Section (Oura) ──
+
+def _activity_section(datasets: dict[str, pd.DataFrame]) -> str:
+    lines = ["## Activity & Movement (Oura Ring)", ""]
+    activity_df = datasets.get("activity", pd.DataFrame())
+
+    if activity_df.empty:
+        lines.append("*No Oura activity data available for this period.*\n")
+        return "\n".join(lines)
+
+    steps_col = next((c for c in ["steps", "total_steps"] if c in activity_df.columns), None)
+    if steps_col:
+        avg_steps = activity_df[steps_col].mean()
+        lines.append(f"**Average Daily Steps:** {avg_steps:,.0f}\n")
+
+        weekly = _weekly_resample(activity_df, "day", steps_col)
+        if len(weekly) > 1:
+            fig, ax = plt.subplots()
+            ax.bar(weekly["day"], weekly[steps_col], width=5, color="#7A6FBE", alpha=0.8)
+            ax.set_ylabel("Steps")
+            ax.set_title("Weekly Average Daily Steps")
+            ax.xaxis.set_major_formatter(mdates.DateFormatter("%b %Y"))
+            ax.xaxis.set_major_locator(mdates.MonthLocator(interval=2))
+            fig.autofmt_xdate()
+            lines.append(_embed_chart(fig, "Weekly Steps Trend"))
+            lines.append("")
+
+    cal_col = next((c for c in ["total_calories", "calories", "active_calories"] if c in activity_df.columns), None)
+    if cal_col:
+        lines.append(f"**Average Daily {cal_col.replace('_', ' ').title()}:** {activity_df[cal_col].mean():,.0f} kcal\n")
+
+    if steps_col:
+        above = (activity_df[steps_col] >= 7500).sum()
+        total = len(activity_df)
+        lines.append(f"**Step Consistency:** {above}/{total} days at 7,500+ steps ({above/total*100:.0f}%)\n")
+
+    return "\n".join(lines)
+
+
+# ── Correlations Section ──
+
+def _correlations_section(correlations: dict[str, Any]) -> str:
+    lines = ["## Cross-Source Correlations & Insights", ""]
+
+    if not correlations:
+        lines.append("*Insufficient cross-source data to compute correlations.*\n")
+        return "\n".join(lines)
+
+    scatter_analyses = [
+        ("sleep_vs_readiness", "Sleep vs Readiness"),
+        ("training_volume_vs_recovery", "Training Volume vs Next-Day Recovery"),
+        ("sleep_vs_training", "Sleep vs Training Performance"),
+        ("activity_vs_sleep", "Activity vs Next-Night Sleep"),
+        ("protein_vs_recovery", "Protein Intake vs Next-Day Recovery"),
+        ("calories_vs_sleep", "Caloric Intake vs Next-Night Sleep"),
+    ]
+
+    for key, title in scatter_analyses:
+        if key not in correlations:
+            continue
+        result = correlations[key]
+        corr = result.get("correlation")
+        data = result.get("data", pd.DataFrame())
+        x_label = result.get("x_label", "X")
+        y_label = result.get("y_label", "Y")
+
+        if data.empty or corr is None:
+            continue
+
+        x_col = [c for c in data.columns if c != "day"][0]
+        y_col = [c for c in data.columns if c != "day"][1]
+
+        fig, ax = plt.subplots()
+        ax.scatter(data[x_col], data[y_col], alpha=0.4, s=15, color="#4A90D9")
+        ax.set_xlabel(x_label)
+        ax.set_ylabel(y_label)
+        ax.set_title(f"{title} (r = {corr:.2f})")
+        lines.append(f"### {title}\n")
+        lines.append(_embed_chart(fig, title))
+        lines.append("")
+
+        strength = _corr_strength(corr)
+        direction = "positive" if corr > 0 else "negative"
+        lines.append(f"A **{strength} {direction} correlation** (r = {corr:.2f}) — "
+                     f"{'suggesting a meaningful relationship' if strength != 'weak' else 'no strong linear relationship detected'}.\n")
+
+    # Narrative for body comp correlations
+    if "nutrition_vs_body_comp" in correlations:
+        lines.append("### Nutrition & Body Composition\n")
+        lines.append("Nutrition and body composition data are both available. "
+                     "Caloric balance trends can be compared against body composition scan changes "
+                     "to assess whether intake is tracking with weight/fat/muscle trends.\n")
+
+    if "training_vs_body_comp" in correlations:
+        lines.append("### Training & Body Composition\n")
+        lines.append("Training volume data and body composition scans are both available. "
+                     "Progressive overload trends can be compared against muscle mass changes.\n")
+
+    return "\n".join(lines)
+
+
+# ── Alerts & Interventions Section ──
+
+def _recent_trend(series: pd.Series, window: int = 28) -> float | None:
+    """Compute the slope of the last `window` values using simple linear regression.
+
+    Returns slope per day, or None if insufficient data.
+    """
+    recent = series.dropna().tail(window)
+    if len(recent) < 7:
+        return None
+    x = range(len(recent))
+    x_mean = sum(x) / len(x)
+    y_mean = recent.mean()
+    numerator = sum((xi - x_mean) * (yi - y_mean) for xi, yi in zip(x, recent))
+    denominator = sum((xi - x_mean) ** 2 for xi in x)
+    if denominator == 0:
+        return 0.0
+    return numerator / denominator
+
+
+def _alerts_section(datasets: dict[str, pd.DataFrame], correlations: dict[str, Any]) -> str:
+    """Generate alerts with severity levels and actionable interventions."""
+    lines = ["## Alerts & Interventions", ""]
+
+    alerts: list[dict[str, str]] = []  # Each: {severity, icon, title, detail, intervention}
+
+    sleep_df = datasets.get("sleep", pd.DataFrame())
+    readiness_df = datasets.get("readiness", pd.DataFrame())
+    activity_df = datasets.get("activity", pd.DataFrame())
+    workouts_df = datasets.get("workouts", pd.DataFrame())
+    body_df = datasets.get("body_composition", pd.DataFrame())
+    nutrition_df = datasets.get("nutrition", pd.DataFrame())
+
+    # ── Body Composition Alerts ──
+
+    if not body_df.empty and len(body_df) >= 3:
+        sorted_body = body_df.sort_values("day")
+
+        # Muscle mass trend (last 4+ scans)
+        if "muscle_mass_kg" in sorted_body.columns:
+            recent_muscle = sorted_body["muscle_mass_kg"].tail(6)
+            slope = _recent_trend(recent_muscle, window=len(recent_muscle))
+            if slope is not None and slope < -0.05:
+                first_val = recent_muscle.iloc[0]
+                last_val = recent_muscle.iloc[-1]
+                alerts.append({
+                    "severity": "high",
+                    "title": "Muscle Mass Declining",
+                    "detail": f"Muscle mass has dropped from {first_val:.1f} kg to {last_val:.1f} kg "
+                              f"over recent scans ({last_val - first_val:+.1f} kg).",
+                    "intervention": (
+                        "- Increase training volume, particularly for lagging muscle groups\n"
+                        "- Ensure protein intake is at least 1.6–2.2 g/kg bodyweight daily\n"
+                        "- Prioritise sleep quality (target 8+ hours) to support muscle protein synthesis\n"
+                        "- Consider a deload week if overreaching is suspected (check HRV trends)"
+                    ),
+                })
+            elif slope is not None and slope > 0.05:
+                alerts.append({
+                    "severity": "positive",
+                    "title": "Muscle Mass Increasing",
+                    "detail": f"Muscle mass is trending upward over recent scans — current trajectory is favourable.",
+                    "intervention": "- Maintain current training and nutrition approach\n- Continue monitoring to ensure the trend sustains",
+                })
+
+        # Fat mass / body fat trend
+        if "body_fat_pct" in sorted_body.columns:
+            recent_fat = sorted_body["body_fat_pct"].tail(6)
+            slope = _recent_trend(recent_fat, window=len(recent_fat))
+            if slope is not None and slope > 0.1:
+                first_val = recent_fat.iloc[0]
+                last_val = recent_fat.iloc[-1]
+                alerts.append({
+                    "severity": "high" if last_val > 20 else "medium",
+                    "title": "Body Fat Increasing",
+                    "detail": f"Body fat has risen from {first_val:.1f}% to {last_val:.1f}% over recent scans.",
+                    "intervention": (
+                        "- Review caloric intake — you may be in a larger surplus than intended\n"
+                        "- Increase daily movement (target 10,000+ steps) to raise TDEE\n"
+                        "- Add 1–2 conditioning sessions per week (e.g. 20 min incline walk, rowing)\n"
+                        "- If intentionally bulking, monitor the rate — aim for <0.5% body fat gain per month"
+                    ),
+                })
+            elif slope is not None and slope < -0.1:
+                alerts.append({
+                    "severity": "positive",
+                    "title": "Body Fat Decreasing",
+                    "detail": f"Body fat is trending downward — current approach is working.",
+                    "intervention": "- Maintain current deficit and activity levels\n- Watch for muscle loss alongside fat loss (check muscle mass trend)",
+                })
+
+        # Visceral fat warning
+        if "visceral_fat" in sorted_body.columns:
+            latest_vf = sorted_body["visceral_fat"].iloc[-1]
+            if pd.notna(latest_vf) and latest_vf >= 12:
+                alerts.append({
+                    "severity": "high",
+                    "title": "Elevated Visceral Fat",
+                    "detail": f"Visceral fat rating is {latest_vf:.0f} (healthy range: 1–12, ideal: <9).",
+                    "intervention": (
+                        "- Prioritise reducing overall body fat through caloric deficit\n"
+                        "- Increase aerobic activity — visceral fat responds well to consistent cardio\n"
+                        "- Reduce alcohol and refined sugar intake\n"
+                        "- Consider consulting a healthcare professional if persistently elevated"
+                    ),
+                })
+
+        # Unfavourable recomposition: gaining fat while losing muscle
+        if "muscle_mass_kg" in sorted_body.columns and "fat_mass_kg" in sorted_body.columns:
+            recent_muscle = sorted_body["muscle_mass_kg"].tail(4)
+            recent_fat_mass = sorted_body["fat_mass_kg"].tail(4)
+            if len(recent_muscle) >= 3:
+                muscle_delta = recent_muscle.iloc[-1] - recent_muscle.iloc[0]
+                fat_delta = recent_fat_mass.iloc[-1] - recent_fat_mass.iloc[0]
+                if muscle_delta < -0.3 and fat_delta > 0.3:
+                    alerts.append({
+                        "severity": "high",
+                        "title": "Unfavourable Recomposition",
+                        "detail": f"Losing muscle ({muscle_delta:+.1f} kg) while gaining fat ({fat_delta:+.1f} kg) "
+                                  f"over recent scans — this is the opposite of the desired direction.",
+                        "intervention": (
+                            "- Urgently review training stimulus — ensure progressive overload is maintained\n"
+                            "- Increase protein to 2.0+ g/kg bodyweight\n"
+                            "- Reduce caloric surplus or move to maintenance calories\n"
+                            "- Prioritise compound movements and adequate training volume (10+ hard sets per muscle group/week)"
+                        ),
+                    })
+
+    # ── Sleep & Recovery Alerts ──
+
+    if not sleep_df.empty and "score" in sleep_df.columns:
+        recent_sleep = sleep_df.sort_values("day").tail(28)
+        avg_recent = recent_sleep["score"].mean()
+        low_sleep_days = (recent_sleep["score"] < 60).sum()
+
+        if avg_recent < 65:
+            alerts.append({
+                "severity": "high",
+                "title": "Poor Recent Sleep Quality",
+                "detail": f"Average sleep score over the last 28 days is {avg_recent:.0f} (below 65 threshold).",
+                "intervention": (
+                    "- Establish a consistent sleep/wake schedule (±30 min even on weekends)\n"
+                    "- Avoid screens 1 hour before bed; keep the bedroom cool (18–19°C)\n"
+                    "- Limit caffeine after 2pm and alcohol within 3 hours of bedtime\n"
+                    "- Consider magnesium glycinate supplementation (200–400 mg before bed)"
+                ),
+            })
+        elif low_sleep_days >= 7:
+            alerts.append({
+                "severity": "medium",
+                "title": "Frequent Poor Sleep Nights",
+                "detail": f"{low_sleep_days} nights with sleep score below 60 in the last 28 days.",
+                "intervention": (
+                    "- Identify patterns — are poor nights linked to late training, alcohol, or screen time?\n"
+                    "- Track evening habits alongside sleep scores to find your triggers\n"
+                    "- Consider adjusting training intensity on days following poor sleep"
+                ),
+            })
+
+        # Declining sleep trend
+        slope = _recent_trend(sleep_df.sort_values("day")["score"], window=28)
+        if slope is not None and slope < -0.2:
+            alerts.append({
+                "severity": "medium",
+                "title": "Declining Sleep Trend",
+                "detail": "Sleep scores are trending downward over the last 4 weeks.",
+                "intervention": (
+                    "- Assess potential stressors (work, life changes, overtraining)\n"
+                    "- Review training load — a deload week may help if HRV is also declining\n"
+                    "- Ensure adequate wind-down routine before bed"
+                ),
+            })
+
+    # ── Readiness / HRV Alerts ──
+
+    if not readiness_df.empty and "score" in readiness_df.columns:
+        recent_readiness = readiness_df.sort_values("day").tail(14)
+        low_readiness_streak = 0
+        for val in reversed(recent_readiness["score"].values):
+            if val < 60:
+                low_readiness_streak += 1
+            else:
+                break
+
+        if low_readiness_streak >= 3:
+            alerts.append({
+                "severity": "high",
+                "title": "Sustained Low Readiness",
+                "detail": f"{low_readiness_streak} consecutive days with readiness below 60 — possible overreaching.",
+                "intervention": (
+                    "- Take a deload or rest day immediately\n"
+                    "- Reduce training volume by 40–50% for the next 3–5 days\n"
+                    "- Prioritise sleep, hydration, and nutrition\n"
+                    "- If readiness remains low for 7+ days, consider a full deload week"
+                ),
+            })
+
+        hrv_col = next((c for c in ["contributors.hrv_balance", "hrv_balance"] if c in readiness_df.columns), None)
+        if hrv_col:
+            slope = _recent_trend(readiness_df.sort_values("day")[hrv_col], window=28)
+            if slope is not None and slope < -0.15:
+                alerts.append({
+                    "severity": "medium",
+                    "title": "HRV Balance Declining",
+                    "detail": "HRV balance has been trending downward — this often precedes illness or overtraining.",
+                    "intervention": (
+                        "- Reduce training intensity (keep volume, lower load) for the next week\n"
+                        "- Increase sleep opportunity by 30–60 minutes\n"
+                        "- Check for early signs of illness (sore throat, fatigue)\n"
+                        "- Ensure adequate micronutrient intake (vitamin D, zinc, magnesium)"
+                    ),
+                })
+
+    # ── Training Alerts ──
+
+    if not workouts_df.empty:
+        sorted_workouts = workouts_df.sort_values("day")
+        recent_cutoff = sorted_workouts["day"].max() - pd.Timedelta(days=14)
+        recent_sessions = sorted_workouts[sorted_workouts["day"] >= recent_cutoff]["day"].nunique()
+
+        if recent_sessions < 2:
+            alerts.append({
+                "severity": "medium",
+                "title": "Training Frequency Drop",
+                "detail": f"Only {recent_sessions} training session(s) in the last 14 days.",
+                "intervention": (
+                    "- If recovering from illness/injury, ease back with reduced volume\n"
+                    "- If motivation is low, switch to shorter sessions (even 30 min counts)\n"
+                    "- Consistency matters more than intensity — 3×/week minimum recommended"
+                ),
+            })
+
+        # Volume declining over last 8 weeks
+        weekly_vol = sorted_workouts.groupby("day")["volume"].sum().resample("W").sum()
+        if len(weekly_vol) >= 8:
+            first_4w = weekly_vol.iloc[-8:-4].mean()
+            last_4w = weekly_vol.iloc[-4:].mean()
+            if first_4w > 0 and last_4w < first_4w * 0.7:
+                alerts.append({
+                    "severity": "medium",
+                    "title": "Training Volume Declining",
+                    "detail": f"Weekly volume dropped from ~{first_4w:,.0f} kg to ~{last_4w:,.0f} kg "
+                              f"over the last 8 weeks ({(last_4w/first_4w - 1)*100:+.0f}%).",
+                    "intervention": (
+                        "- If intentional (deload), this is fine — plan to ramp back up\n"
+                        "- If unintentional, review programming — are you progressing or stalling?\n"
+                        "- Check recovery markers (sleep, readiness) — under-recovery limits training capacity"
+                    ),
+                })
+
+        # Muscle group imbalance
+        if "muscle_group" in sorted_workouts.columns:
+            group_vol = sorted_workouts.groupby("muscle_group")["volume"].sum()
+            group_vol = group_vol[group_vol > 0].sort_values(ascending=False)
+            if len(group_vol) >= 4:
+                # Check push/pull balance
+                push_groups = ["chest", "shoulders", "triceps"]
+                pull_groups = ["lats", "upper_back", "biceps"]
+                push_vol = group_vol[group_vol.index.isin(push_groups)].sum()
+                pull_vol = group_vol[group_vol.index.isin(pull_groups)].sum()
+                if push_vol > 0 and pull_vol > 0:
+                    ratio = push_vol / pull_vol
+                    if ratio > 1.5:
+                        alerts.append({
+                            "severity": "medium",
+                            "title": "Push/Pull Imbalance",
+                            "detail": f"Push volume is {ratio:.1f}× pull volume — ideally this should be close to 1:1.",
+                            "intervention": (
+                                "- Add more rowing and pulling movements (cable rows, face pulls, pull-ups)\n"
+                                "- Aim for equal sets of horizontal push and pull per week\n"
+                                "- Imbalance increases shoulder injury risk over time"
+                            ),
+                        })
+                    elif ratio < 0.67:
+                        alerts.append({
+                            "severity": "medium",
+                            "title": "Pull-Dominant Imbalance",
+                            "detail": f"Pull volume is {1/ratio:.1f}× push volume.",
+                            "intervention": "- Add more pressing movements to balance the ratio\n- Ensure adequate chest and shoulder training",
+                        })
+
+                # Check lower vs upper
+                lower_groups = ["quadriceps", "hamstrings", "glutes", "calves", "adductors", "abductors"]
+                upper_groups = push_groups + pull_groups
+                lower_vol = group_vol[group_vol.index.isin(lower_groups)].sum()
+                upper_vol = group_vol[group_vol.index.isin(upper_groups)].sum()
+                if upper_vol > 0 and lower_vol > 0:
+                    ratio = upper_vol / lower_vol
+                    if ratio > 2.0:
+                        alerts.append({
+                            "severity": "low",
+                            "title": "Upper-Body Dominant Training",
+                            "detail": f"Upper body volume is {ratio:.1f}× lower body volume.",
+                            "intervention": "- Consider adding a dedicated leg day or extra lower-body compounds\n- Squats, deadlifts, and lunges build a strong foundation",
+                        })
+
+                # Neglected muscle groups (< 3% of total volume)
+                total_vol = group_vol.sum()
+                neglected = [g for g, v in group_vol.items() if v / total_vol < 0.03 and g != "other"]
+                if neglected:
+                    alerts.append({
+                        "severity": "low",
+                        "title": "Undertrained Muscle Groups",
+                        "detail": f"These groups receive less than 3% of total volume: {', '.join(neglected)}.",
+                        "intervention": f"- Add targeted accessory work for {', '.join(neglected)}\n- Even 2–3 sets per week can prevent imbalances",
+                    })
+
+    # ── Activity Alerts ──
+
+    if not activity_df.empty:
+        steps_col = next((c for c in ["steps", "total_steps"] if c in activity_df.columns), None)
+        if steps_col:
+            recent_steps = activity_df.sort_values("day").tail(14)
+            avg_recent_steps = recent_steps[steps_col].mean()
+            if avg_recent_steps < 5000:
+                alerts.append({
+                    "severity": "medium",
+                    "title": "Low Daily Movement",
+                    "detail": f"Average steps over the last 14 days: {avg_recent_steps:,.0f} (below 5,000).",
+                    "intervention": (
+                        "- Set a daily step target and use hourly movement reminders\n"
+                        "- Add a 10–15 min walk after meals (improves glucose regulation too)\n"
+                        "- Low NEAT (non-exercise activity) limits fat loss regardless of gym training"
+                    ),
+                })
+
+    # ── Cross-Source Alerts ──
+
+    # Training load → poor recovery pattern
+    if "training_volume_vs_recovery" in correlations:
+        corr = correlations["training_volume_vs_recovery"].get("correlation")
+        if corr is not None and corr < -0.3:
+            alerts.append({
+                "severity": "medium",
+                "title": "Heavy Training Hurting Recovery",
+                "detail": f"Strong negative correlation (r={corr:.2f}) between training volume and next-day readiness.",
+                "intervention": (
+                    "- Space heavy sessions 48+ hours apart\n"
+                    "- Add a light recovery day (walking, mobility) after high-volume sessions\n"
+                    "- Ensure post-workout nutrition (protein + carbs within 2 hours)"
+                ),
+            })
+
+    # ── Format Output ──
+
+    if not alerts:
+        lines.append("No alerts to report — all metrics are within healthy ranges.\n")
+        return "\n".join(lines)
+
+    # Sort by severity
+    severity_order = {"high": 0, "medium": 1, "low": 2, "positive": 3}
+    alerts.sort(key=lambda a: severity_order.get(a["severity"], 99))
+
+    severity_icons = {"high": "🔴", "medium": "🟡", "low": "🔵", "positive": "🟢"}
+
+    for alert in alerts:
+        icon = severity_icons.get(alert["severity"], "⚪")
+        lines.append(f"### {icon} {alert['title']}\n")
+        lines.append(f"{alert['detail']}\n")
+        lines.append(f"**Recommended actions:**\n")
+        lines.append(alert["intervention"])
+        lines.append("")
+
+    # Alert summary count
+    counts = {}
+    for alert in alerts:
+        counts[alert["severity"]] = counts.get(alert["severity"], 0) + 1
+    summary_parts = []
+    for sev in ["high", "medium", "low", "positive"]:
+        if sev in counts:
+            summary_parts.append(f"{severity_icons[sev]} {counts[sev]} {sev}")
+    lines.append(f"*Alert summary: {' | '.join(summary_parts)}*\n")
+
+    return "\n".join(lines)
+
+
+# ── Summary Section ──
+
+def _summary_section(datasets: dict[str, pd.DataFrame], correlations: dict[str, Any]) -> str:
+    lines = ["## Summary — Top Observations", ""]
+    observations: list[str] = []
+
+    # Sleep insight
+    sleep_df = datasets.get("sleep", pd.DataFrame())
+    if not sleep_df.empty and "score" in sleep_df.columns:
+        avg = sleep_df["score"].mean()
+        if avg >= 85:
+            observations.append(f"Sleep quality is excellent (avg score {avg:.0f}) — a strong foundation for recovery.")
+        elif avg >= 70:
+            observations.append(f"Sleep quality is good (avg score {avg:.0f}) — room for improvement on consistency.")
+        else:
+            observations.append(f"Sleep quality needs attention (avg score {avg:.0f}) — this may be limiting recovery.")
+
+    # Training insight
+    workouts_df = datasets.get("workouts", pd.DataFrame())
+    if not workouts_df.empty:
+        sessions = workouts_df["day"].nunique()
+        date_range = (workouts_df["day"].max() - workouts_df["day"].min()).days
+        if date_range > 0:
+            freq = sessions / (date_range / 7)
+            observations.append(f"Training frequency averages {freq:.1f} sessions/week across {sessions} total sessions.")
+
+    # Nutrition insight
+    nutr_df = datasets.get("nutrition", pd.DataFrame())
+    if not nutr_df.empty and "calories" in nutr_df.columns:
+        logged = nutr_df[nutr_df["calories"] > 0]
+        compliance = len(logged) / len(nutr_df) * 100
+        if compliance < 70:
+            observations.append(f"Nutrition tracking compliance is {compliance:.0f}% — more consistent logging would improve insights.")
+
+    # Correlation insights
+    for key, label in [("sleep_vs_readiness", "sleep-readiness"), ("protein_vs_recovery", "protein-recovery")]:
+        if key in correlations:
+            corr = correlations[key].get("correlation")
+            if corr is not None and abs(corr) > 0.3:
+                observations.append(f"Notable {label} correlation (r={corr:.2f}) — worth monitoring.")
+
+    # Body comp insight
+    body_df = datasets.get("body_composition", pd.DataFrame())
+    if not body_df.empty and len(body_df) >= 2:
+        first = body_df.sort_values("day").iloc[0]
+        last = body_df.sort_values("day").iloc[-1]
+        if "muscle_mass_kg" in body_df.columns:
+            delta = last["muscle_mass_kg"] - first["muscle_mass_kg"]
+            observations.append(f"Muscle mass change: {delta:+.1f} kg over the period.")
+
+    if not observations:
+        observations.append("Add more data sources to unlock cross-source insights.")
+
+    for idx, obs in enumerate(observations[:5], 1):
+        lines.append(f"{idx}. {obs}")
+    lines.append("")
+
+    return "\n".join(lines)
+
+
+# ── Main Generator ──
+
+def generate_report(
+    start_date: str,
+    end_date: str,
+    datasets: dict[str, pd.DataFrame],
+    correlations: dict[str, Any],
+    output_dir: Path,
+) -> Path:
+    """Generate a full multi-source markdown health report."""
+    output_dir.mkdir(parents=True, exist_ok=True)
+    report_date = datetime.now().strftime("%Y-%m-%d")
+    report_path = output_dir / f"health_report_{report_date}.md"
+
+    sections: list[str] = []
+
+    # Header
+    sections.append("# Unified Health Intelligence Report\n")
+    sections.append(f"**Date range:** {start_date} to {end_date}  ")
+    sections.append(f"**Generated:** {datetime.now().strftime('%Y-%m-%d %H:%M')}  ")
+
+    available = [name for name, df in datasets.items() if not df.empty]
+    total_records = sum(len(df) for df in datasets.values())
+    sections.append(f"**Data sources active:** {', '.join(available) if available else 'none'}  ")
+    sections.append(f"**Total records analysed:** {total_records:,}\n")
+    sections.append("---\n")
+
+    # Sections in spec order
+    sections.append(_nutrition_section(datasets))
+    sections.append("---\n")
+    sections.append(_sleep_recovery_section(datasets))
+    sections.append("---\n")
+    sections.append(_training_section(datasets))
+    sections.append("---\n")
+    sections.append(_body_composition_section(datasets))
+    sections.append("---\n")
+    sections.append(_activity_section(datasets))
+    sections.append("---\n")
+    sections.append(_correlations_section(correlations))
+    sections.append("---\n")
+    sections.append(_alerts_section(datasets, correlations))
+    sections.append("---\n")
+    sections.append(_summary_section(datasets, correlations))
+
+    report_path.write_text("\n".join(sections), encoding="utf-8")
+    logger.info("Report generated: %s", report_path)
+    return report_path

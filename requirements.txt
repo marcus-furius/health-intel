@@ -1,0 +1,7 @@
+requests
+pandas
+matplotlib
+python-dotenv
+pyarrow
+myfitnesspal
+browser_cookie3

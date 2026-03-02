@@ -1,14 +1,15 @@
 {
   "source": "oura",
-  "last_sync": "2026-02-19T21:00:49.086122",
+  "last_sync": "2026-03-02T21:15:52.782221",
   "start_date": "2025-02-19",
-  "end_date": "2026-02-19",
+  "end_date": "2026-03-02",
   "record_counts": {
-    "daily_sleep": 355,
-    "sleep": 624,
-    "daily_readiness": 355,
-    "daily_activity": 364,
-    "heartrate": 111,
-    "daily_spo2": 347
+    "daily_sleep": 360,
+    "sleep": 633,
+    "daily_readiness": 360,
+    "daily_activity": 371,
+    "heartrate": 1556,
+    "daily_spo2": 352,
+    "daily_stress": 369
   }
 }

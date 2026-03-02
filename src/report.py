@@ -114,6 +114,77 @@ def _nutrition_section(datasets: dict[str, pd.DataFrame]) -> str:
             lines.append(_embed_chart(fig, "Weekly Calorie Trend"))
             lines.append("")
 
+    # Macro split stacked area chart (weekly)
+    macro_weekly_cols = {k: v for k, v in {"protein": "Protein", "carbohydrates": "Carbs", "fat": "Fat"}.items()
+                        if k in logged.columns}
+    if len(macro_weekly_cols) == 3 and "day" in logged.columns and len(logged) > 7:
+        weekly_macros = logged[["day"] + list(macro_weekly_cols.keys())].set_index("day").resample("W").mean().dropna()
+        if len(weekly_macros) > 1:
+            fig, ax = plt.subplots()
+            colours = {"protein": "#50B88E", "carbohydrates": "#E8915A", "fat": "#7A6FBE"}
+            bottom = None
+            for col, label in macro_weekly_cols.items():
+                vals = weekly_macros[col]
+                if bottom is None:
+                    ax.bar(weekly_macros.index, vals, width=5, label=label, color=colours[col], alpha=0.85)
+                    bottom = vals.copy()
+                else:
+                    ax.bar(weekly_macros.index, vals, width=5, bottom=bottom, label=label,
+                           color=colours[col], alpha=0.85)
+                    bottom = bottom + vals
+            ax.set_ylabel("Grams")
+            ax.set_title("Weekly Average Daily Macros")
+            ax.legend(loc="upper left", fontsize=8)
+            ax.xaxis.set_major_formatter(mdates.DateFormatter("%b %Y"))
+            ax.xaxis.set_major_locator(mdates.MonthLocator(interval=2))
+            fig.autofmt_xdate()
+            lines.append(_embed_chart(fig, "Weekly Macro Split"))
+            lines.append("")
+
+    # Protein per kg bodyweight trend (weekly)
+    if "protein" in logged.columns and not body_comp_df.empty and "weight_kg" in body_comp_df.columns:
+        latest_weight = body_comp_df.sort_values("day")["weight_kg"].iloc[-1]
+        weekly_protein = _weekly_resample(logged, "day", "protein")
+        if len(weekly_protein) > 1:
+            weekly_protein["protein_per_kg"] = weekly_protein["protein"] / latest_weight
+            fig, ax = plt.subplots()
+            ax.plot(weekly_protein["day"], weekly_protein["protein_per_kg"],
+                    marker="o", markersize=3, linewidth=1.5, color="#50B88E")
+            ax.axhspan(1.6, 2.2, color="#50B88E", alpha=0.1, label="Target range (1.6–2.2 g/kg)")
+            ax.axhline(y=1.6, color="#50B88E", linestyle="--", linewidth=0.8, alpha=0.5)
+            ax.axhline(y=2.2, color="#50B88E", linestyle="--", linewidth=0.8, alpha=0.5)
+            ax.set_ylabel("Protein (g/kg)")
+            ax.set_title("Weekly Protein per kg Bodyweight")
+            ax.legend(loc="lower left", fontsize=8)
+            ax.xaxis.set_major_formatter(mdates.DateFormatter("%b %Y"))
+            ax.xaxis.set_major_locator(mdates.MonthLocator(interval=2))
+            fig.autofmt_xdate()
+            lines.append(_embed_chart(fig, "Weekly Protein per kg Trend"))
+            lines.append("")
+
+    # Meal calorie distribution
+    if "meals" in nutr_df.columns:
+        meal_cals: dict[str, list[float]] = {}
+        for meals_raw in nutr_df["meals"]:
+            meals_list = meals_raw if isinstance(meals_raw, list) else []
+            for meal in meals_list:
+                if isinstance(meal, dict) and "calories" in meal:
+                    name = meal.get("name", "Unknown")
+                    meal_cals.setdefault(name, []).append(float(meal["calories"]))
+        if meal_cals:
+            avg_by_meal = {name: sum(vals) / len(vals) for name, vals in meal_cals.items() if vals}
+            # Sort by calorie contribution
+            sorted_meals = sorted(avg_by_meal.items(), key=lambda x: x[1], reverse=True)
+            names = [m[0] for m in sorted_meals]
+            values = [m[1] for m in sorted_meals]
+            colours = ["#4A90D9", "#E8915A", "#50B88E", "#7A6FBE", "#F4845F"]
+            fig, ax = plt.subplots(figsize=(8, 4))
+            ax.barh(names[::-1], values[::-1], color=colours[:len(names)][::-1])
+            ax.set_xlabel("Average Calories (kcal)")
+            ax.set_title("Average Calories by Meal")
+            lines.append(_embed_chart(fig, "Meal Calorie Distribution"))
+            lines.append("")
+
     # Surplus/deficit estimate
     activity_df = datasets.get("activity", pd.DataFrame())
     if not logged.empty and not body_comp_df.empty and not activity_df.empty:
@@ -225,6 +296,74 @@ def _sleep_recovery_section(datasets: dict[str, pd.DataFrame]) -> str:
     return "\n".join(lines)
 
 
+# ── Stress Section (Oura) ──
+
+def _stress_section(datasets: dict[str, pd.DataFrame]) -> str:
+    lines = ["## Stress & Recovery Balance (Oura Ring)", ""]
+    stress_df = datasets.get("stress", pd.DataFrame())
+
+    if stress_df.empty:
+        lines.append("*No stress data available for this period.*\n")
+        return "\n".join(lines)
+
+    has_stress_high = "stress_high" in stress_df.columns
+    has_recovery_high = "recovery_high" in stress_df.columns
+    has_summary = "day_summary" in stress_df.columns
+
+    if has_stress_high and has_recovery_high:
+        avg_stress = stress_df["stress_high"].mean()
+        avg_recovery = stress_df["recovery_high"].mean()
+        lines.append(f"**Average Daily High Stress:** {avg_stress:.0f} minutes")
+        lines.append(f"**Average Daily High Recovery:** {avg_recovery:.0f} minutes")
+        ratio = avg_recovery / avg_stress if avg_stress > 0 else float("inf")
+        lines.append(f"**Recovery:Stress Ratio:** {ratio:.1f}:1\n")
+
+        if ratio < 1:
+            lines.append("*Recovery time is lower than stress time — prioritise rest and recovery activities.*\n")
+
+        # Weekly trend chart — stress and recovery stacked
+        weekly_stress = _weekly_resample(stress_df, "day", "stress_high")
+        weekly_recovery = _weekly_resample(stress_df, "day", "recovery_high")
+        if len(weekly_stress) > 1 and len(weekly_recovery) > 1:
+            merged_weekly = weekly_stress.merge(weekly_recovery, on="day", suffixes=("_stress", "_recovery"))
+            fig, ax = plt.subplots()
+            width = 5
+            ax.bar(merged_weekly["day"], merged_weekly["stress_high"],
+                   width=width, color="#E63946", alpha=0.8, label="High Stress")
+            ax.bar(merged_weekly["day"], merged_weekly["recovery_high"],
+                   width=width, bottom=merged_weekly["stress_high"],
+                   color="#50B88E", alpha=0.8, label="High Recovery")
+            ax.set_ylabel("Minutes")
+            ax.set_title("Weekly Avg Daily Stress vs Recovery")
+            ax.legend(loc="upper left", fontsize=8)
+            ax.xaxis.set_major_formatter(mdates.DateFormatter("%b %Y"))
+            ax.xaxis.set_major_locator(mdates.MonthLocator(interval=2))
+            fig.autofmt_xdate()
+            lines.append(_embed_chart(fig, "Weekly Stress vs Recovery"))
+            lines.append("")
+
+        # Stress trend
+        trend = _recent_trend(stress_df["stress_high"])
+        if trend is not None:
+            if trend > 0.5:
+                lines.append("Daily stress has been **increasing** over the past 28 days.\n")
+            elif trend < -0.5:
+                lines.append("Daily stress has been **decreasing** over the past 28 days.\n")
+            else:
+                lines.append("Daily stress has been **stable** over the past 28 days.\n")
+
+    # Day summary distribution
+    if has_summary:
+        summary_counts = stress_df["day_summary"].value_counts()
+        total = len(stress_df)
+        lines.append("**Day Summary Distribution:**\n")
+        for summary, count in summary_counts.items():
+            lines.append(f"- {summary}: {count} days ({count/total*100:.0f}%)")
+        lines.append("")
+
+    return "\n".join(lines)
+
+
 # ── Training Section (Hevy) ──
 
 def _training_section(datasets: dict[str, pd.DataFrame]) -> str:
@@ -308,6 +447,10 @@ def _training_section(datasets: dict[str, pd.DataFrame]) -> str:
 def _body_composition_section(datasets: dict[str, pd.DataFrame]) -> str:
     lines = ["## Body Composition (Boditrax)", ""]
     body_df = datasets.get("body_composition", pd.DataFrame())
+    mfp_weight_df = datasets.get("mfp_weight", pd.DataFrame())
+    if not mfp_weight_df.empty and "day" in mfp_weight_df.columns:
+        mfp_weight_df = mfp_weight_df.copy()
+        mfp_weight_df["day"] = pd.to_datetime(mfp_weight_df["day"])
 
     if body_df.empty:
         lines.append("*No Boditrax scan data available for this period.*\n")
@@ -341,7 +484,13 @@ def _body_composition_section(datasets: dict[str, pd.DataFrame]) -> str:
                 axes = [axes]
             colors = ["#4A90D9", "#E8915A", "#50B88E"]
             for idx, col in enumerate(plot_cols):
-                axes[idx].plot(body_df["day"], body_df[col], marker="o", color=colors[idx], linewidth=1.5)
+                axes[idx].plot(body_df["day"], body_df[col], marker="o", color=colors[idx], linewidth=1.5,
+                               label="Boditrax scan")
+                # Overlay MFP daily weight on the weight panel
+                if col == "weight_kg" and not mfp_weight_df.empty:
+                    axes[idx].scatter(mfp_weight_df["day"], mfp_weight_df["weight_kg"],
+                                      color="#4A90D9", alpha=0.25, s=12, label="MFP daily weight")
+                    axes[idx].legend(fontsize=7, loc="best")
                 axes[idx].set_title(col.replace("_", " ").title())
                 axes[idx].xaxis.set_major_formatter(mdates.DateFormatter("%b %y"))
                 fig.autofmt_xdate()
@@ -405,6 +554,155 @@ def _activity_section(datasets: dict[str, pd.DataFrame]) -> str:
     return "\n".join(lines)
 
 
+# ── Heart Rate Section ──
+
+def _heartrate_section(datasets: dict[str, pd.DataFrame]) -> str:
+    lines = ["## Heart Rate Trends (Oura Ring)", ""]
+    hr_df = datasets.get("heartrate", pd.DataFrame())
+
+    if hr_df.empty or len(hr_df) < 3:
+        lines.append("*Insufficient heart rate data for trend analysis (need 3+ days).*\n")
+        return "\n".join(lines)
+
+    if "hr_mean" in hr_df.columns:
+        avg_rhr = hr_df["hr_mean"].mean()
+        lines.append(f"**Average Resting Heart Rate:** {avg_rhr:.0f} bpm")
+        lines.append(f"**Range:** {hr_df['hr_min'].min():.0f} – {hr_df['hr_max'].max():.0f} bpm")
+        lines.append(f"**Days with data:** {len(hr_df)}\n")
+
+        # Weekly trend chart
+        weekly = _weekly_resample(hr_df, "day", "hr_mean")
+        if len(weekly) > 1:
+            fig, ax = plt.subplots()
+            ax.plot(weekly["day"], weekly["hr_mean"], color="#E63946", linewidth=2, marker="o", markersize=3)
+            ax.fill_between(weekly["day"], weekly["hr_mean"], alpha=0.15, color="#E63946")
+            ax.set_ylabel("Heart Rate (bpm)")
+            ax.set_title("Weekly Average Resting Heart Rate")
+            ax.xaxis.set_major_formatter(mdates.DateFormatter("%b %Y"))
+            ax.xaxis.set_major_locator(mdates.MonthLocator(interval=2))
+            fig.autofmt_xdate()
+            lines.append(_embed_chart(fig, "Weekly RHR Trend"))
+            lines.append("")
+
+        # Daily variability chart (std dev)
+        if "hr_std" in hr_df.columns and len(hr_df) > 7:
+            weekly_std = _weekly_resample(hr_df, "day", "hr_std")
+            if len(weekly_std) > 1:
+                fig, ax = plt.subplots()
+                ax.bar(weekly_std["day"], weekly_std["hr_std"], width=5, color="#F4845F", alpha=0.8)
+                ax.set_ylabel("HR Std Dev (bpm)")
+                ax.set_title("Weekly Heart Rate Variability (Intra-day)")
+                ax.xaxis.set_major_formatter(mdates.DateFormatter("%b %Y"))
+                ax.xaxis.set_major_locator(mdates.MonthLocator(interval=2))
+                fig.autofmt_xdate()
+                lines.append(_embed_chart(fig, "Weekly HR Variability"))
+                lines.append("")
+
+        # Trend narrative
+        trend = _recent_trend(hr_df["hr_mean"])
+        if trend is not None:
+            if trend < -0.05:
+                lines.append("Resting heart rate has been **trending downward** (improving) over the past 28 days.\n")
+            elif trend > 0.05:
+                lines.append("Resting heart rate has been **trending upward** over the past 28 days — "
+                             "may indicate accumulated fatigue or under-recovery.\n")
+            else:
+                lines.append("Resting heart rate has been **stable** over the past 28 days.\n")
+
+    return "\n".join(lines)
+
+
+# ── SpO2 & Breathing Section ──
+
+def _spo2_section(datasets: dict[str, pd.DataFrame]) -> str:
+    lines = ["## Blood Oxygen & Breathing (Oura Ring)", ""]
+    spo2_df = datasets.get("spo2", pd.DataFrame())
+
+    if spo2_df.empty:
+        lines.append("*No SpO2 data available for this period.*\n")
+        return "\n".join(lines)
+
+    spo2_col = "spo2_percentage.average"
+    bdi_col = "breathing_disturbance_index"
+
+    # --- SpO2 Average ---
+    if spo2_col in spo2_df.columns:
+        avg_spo2 = spo2_df[spo2_col].mean()
+        min_spo2 = spo2_df[spo2_col].min()
+        max_spo2 = spo2_df[spo2_col].max()
+        lines.append(f"**Average Nightly SpO2:** {avg_spo2:.1f}%")
+        lines.append(f"**Range:** {min_spo2:.1f}% – {max_spo2:.1f}%\n")
+
+        # Flag if average is below normal
+        if avg_spo2 < 95:
+            lines.append("*Note: Average SpO2 below 95% — consider discussing with a healthcare provider.*\n")
+
+        # Low nights count
+        low_nights = (spo2_df[spo2_col] < 95).sum()
+        total_nights = len(spo2_df)
+        lines.append(f"**Nights below 95%:** {low_nights}/{total_nights} ({low_nights/total_nights*100:.0f}%)\n")
+
+        # Weekly trend chart
+        weekly = _weekly_resample(spo2_df, "day", spo2_col)
+        if len(weekly) > 1:
+            fig, ax = plt.subplots()
+            ax.plot(weekly["day"], weekly[spo2_col], color="#3A86FF", linewidth=2, marker="o", markersize=3)
+            ax.fill_between(weekly["day"], weekly[spo2_col], alpha=0.15, color="#3A86FF")
+            ax.axhline(y=95, color="#E63946", linestyle="--", linewidth=1, alpha=0.6, label="95% threshold")
+            ax.set_ylabel("SpO2 (%)")
+            ax.set_title("Weekly Average Nightly SpO2")
+            ax.xaxis.set_major_formatter(mdates.DateFormatter("%b %Y"))
+            ax.xaxis.set_major_locator(mdates.MonthLocator(interval=2))
+            ax.legend(loc="lower left", fontsize=8)
+            fig.autofmt_xdate()
+            lines.append(_embed_chart(fig, "Weekly SpO2 Trend"))
+            lines.append("")
+
+        # Trend narrative
+        trend = _recent_trend(spo2_df[spo2_col])
+        if trend is not None:
+            if trend > 0.01:
+                lines.append("SpO2 has been **trending upward** over the past 28 days.\n")
+            elif trend < -0.01:
+                lines.append("SpO2 has been **trending downward** over the past 28 days.\n")
+            else:
+                lines.append("SpO2 has been **stable** over the past 28 days.\n")
+
+    # --- Breathing Disturbance Index ---
+    if bdi_col in spo2_df.columns:
+        bdi_valid = spo2_df[bdi_col].dropna()
+        if len(bdi_valid) > 0:
+            avg_bdi = bdi_valid.mean()
+            lines.append(f"**Average Breathing Disturbance Index:** {avg_bdi:.1f}\n")
+
+            # Interpret BDI (events per hour — lower is better)
+            if avg_bdi < 5:
+                lines.append("Breathing disturbance is **normal** (< 5 events/hr).\n")
+            elif avg_bdi < 15:
+                lines.append("Breathing disturbance is **mild** (5–15 events/hr).\n")
+            elif avg_bdi < 30:
+                lines.append("Breathing disturbance is **moderate** (15–30 events/hr) — consider a sleep study.\n")
+            else:
+                lines.append("Breathing disturbance is **severe** (30+ events/hr) — strongly consider a sleep study.\n")
+
+            # Weekly BDI chart
+            weekly_bdi = _weekly_resample(spo2_df, "day", bdi_col)
+            if len(weekly_bdi) > 1:
+                fig, ax = plt.subplots()
+                ax.bar(weekly_bdi["day"], weekly_bdi[bdi_col], width=5, color="#F77F00", alpha=0.8)
+                ax.axhline(y=5, color="#E63946", linestyle="--", linewidth=1, alpha=0.6, label="Normal threshold (5)")
+                ax.set_ylabel("Events / hr")
+                ax.set_title("Weekly Avg Breathing Disturbance Index")
+                ax.xaxis.set_major_formatter(mdates.DateFormatter("%b %Y"))
+                ax.xaxis.set_major_locator(mdates.MonthLocator(interval=2))
+                ax.legend(loc="upper left", fontsize=8)
+                fig.autofmt_xdate()
+                lines.append(_embed_chart(fig, "Weekly Breathing Disturbance Trend"))
+                lines.append("")
+
+    return "\n".join(lines)
+
+
 # ── Correlations Section ──
 
 def _correlations_section(correlations: dict[str, Any]) -> str:
@@ -421,6 +719,9 @@ def _correlations_section(correlations: dict[str, Any]) -> str:
         ("activity_vs_sleep", "Activity vs Next-Night Sleep"),
         ("protein_vs_recovery", "Protein Intake vs Next-Day Recovery"),
         ("calories_vs_sleep", "Caloric Intake vs Next-Night Sleep"),
+        ("stress_vs_sleep", "Stress vs Next-Night Sleep"),
+        ("stress_vs_recovery", "Stress vs Next-Day Recovery"),
+        ("stress_vs_training", "Stress vs Training Performance"),
     ]
 
     for key, title in scatter_analyses:
@@ -774,6 +1075,40 @@ def _alerts_section(datasets: dict[str, pd.DataFrame], correlations: dict[str, A
                         "intervention": f"- Add targeted accessory work for {', '.join(neglected)}\n- Even 2–3 sets per week can prevent imbalances",
                     })
 
+    # ── Stress Alerts ──
+
+    stress_df = datasets.get("stress", pd.DataFrame())
+    if not stress_df.empty and "stress_high" in stress_df.columns:
+        recent_stress = stress_df.sort_values("day").tail(14)
+        avg_recent_stress = recent_stress["stress_high"].mean()
+        if "recovery_high" in recent_stress.columns:
+            avg_recent_recovery = recent_stress["recovery_high"].mean()
+            if avg_recent_stress > 0 and avg_recent_recovery / avg_recent_stress < 0.5:
+                alerts.append({
+                    "severity": "medium",
+                    "title": "Low Recovery-to-Stress Ratio",
+                    "detail": (f"Over the last 14 days, avg high recovery ({avg_recent_recovery:.0f} min) "
+                               f"is less than half of avg high stress ({avg_recent_stress:.0f} min)."),
+                    "intervention": (
+                        "- Schedule deliberate recovery activities (walking, meditation, breathwork)\n"
+                        "- Review sleep hygiene — recovery largely happens during sleep\n"
+                        "- Consider reducing training intensity temporarily if readiness is also declining"
+                    ),
+                })
+
+        stress_trend = _recent_trend(stress_df["stress_high"])
+        if stress_trend is not None and stress_trend > 1.0:
+            alerts.append({
+                "severity": "medium",
+                "title": "Stress Rapidly Increasing",
+                "detail": f"High stress minutes trending sharply upward over the past 28 days (slope: +{stress_trend:.1f} min/day).",
+                "intervention": (
+                    "- Identify and address stressors (work, sleep debt, overtraining)\n"
+                    "- Increase parasympathetic activity: deep breathing, cold exposure, nature walks\n"
+                    "- Monitor HRV and readiness scores for downstream impact"
+                ),
+            })
+
     # ── Activity Alerts ──
 
     if not activity_df.empty:
@@ -935,11 +1270,17 @@ def generate_report(
     sections.append("---\n")
     sections.append(_sleep_recovery_section(datasets))
     sections.append("---\n")
+    sections.append(_stress_section(datasets))
+    sections.append("---\n")
     sections.append(_training_section(datasets))
     sections.append("---\n")
     sections.append(_body_composition_section(datasets))
     sections.append("---\n")
     sections.append(_activity_section(datasets))
+    sections.append("---\n")
+    sections.append(_heartrate_section(datasets))
+    sections.append("---\n")
+    sections.append(_spo2_section(datasets))
     sections.append("---\n")
     sections.append(_correlations_section(correlations))
     sections.append("---\n")

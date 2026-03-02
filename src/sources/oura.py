@@ -21,6 +21,7 @@ ENDPOINTS = {
     "daily_activity": "/v2/usercollection/daily_activity",
     "heartrate": "/v2/usercollection/heartrate",
     "daily_spo2": "/v2/usercollection/daily_spo2",
+    "daily_stress": "/v2/usercollection/daily_stress",
 }
 
 

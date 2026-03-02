@@ -80,10 +80,12 @@ class BoditraxSource:
 
         all_scans: list[dict[str, Any]] = []
 
-        # Try native Boditrax account exports first
-        native_files = sorted(raw_dir.glob("BoditraxAccount_*.csv"))
-        for csv_file in native_files:
-            scans = self._parse_native_export(csv_file, start_date, end_date)
+        # Try native Boditrax account exports — use most recent only
+        # (each export contains the full scan history, so reading multiple = duplicates)
+        native_files = sorted(raw_dir.glob("BoditraxAccount_*.csv"), reverse=True)
+        if native_files:
+            logger.info("Using most recent Boditrax export: %s", native_files[0].name)
+            scans = self._parse_native_export(native_files[0], start_date, end_date)
             all_scans.extend(scans)
 
         # Also try simple wide-format CSVs

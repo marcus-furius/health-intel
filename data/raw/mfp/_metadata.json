@@ -1,0 +1,12 @@
+{
+  "source": "mfp",
+  "mode": "csv",
+  "last_sync": "2026-03-02T20:34:35.102712",
+  "start_date": "2025-02-19",
+  "end_date": "2026-03-02",
+  "record_counts": {
+    "diary": 248,
+    "measurements": 114,
+    "exercise": 2417
+  }
+}

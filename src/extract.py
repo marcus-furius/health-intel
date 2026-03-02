@@ -60,19 +60,20 @@ def extract_all(start_date: str, end_date: str, data_dir: Path) -> dict[str, dic
         logger.exception("Boditrax extraction failed")
         all_counts["boditrax"] = {}
 
-    # --- MyFitnessPal (browser cookie auth — no credentials needed in .env) ---
+    # --- MyFitnessPal (CSV export from MFP Premium) ---
     mfp_enabled = os.getenv("MFP_ENABLED", "true").lower() != "false"
     if mfp_enabled:
-        logger.info("Extracting from MyFitnessPal (browser cookie auth)...")
+        logger.info("Extracting from MyFitnessPal (CSV export)...")
         try:
             from src.sources.mfp import MfpSource
             mfp = MfpSource()
-            mfp_data = mfp.pull(start_date, end_date)
-            all_counts["mfp"] = mfp.save_raw(mfp_data, raw_dir / "mfp", start_date, end_date)
+            mfp_raw_dir = raw_dir / "mfp"
+            mfp_data = mfp.pull(start_date, end_date, raw_dir=mfp_raw_dir)
+            all_counts["mfp"] = mfp.save_raw(mfp_data, mfp_raw_dir, start_date, end_date)
         except Exception:
             logger.exception(
-                "MFP extraction failed. Ensure you are logged into "
-                "MyFitnessPal in your browser. Set MFP_ENABLED=false to skip."
+                "MFP extraction failed. Place your MFP Premium CSV export "
+                "in data/raw/mfp/. Set MFP_ENABLED=false to skip."
             )
             all_counts["mfp"] = {}
     else:

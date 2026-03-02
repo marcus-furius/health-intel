@@ -140,6 +140,56 @@ def compute_correlations(datasets: dict[str, pd.DataFrame]) -> dict[str, Any]:
                     "y_label": "Next-Night Sleep Score",
                 }
 
+    # --- Stress Correlations ---
+
+    stress_df = datasets.get("stress", pd.DataFrame())
+
+    if not stress_df.empty and "stress_high" in stress_df.columns:
+        # Stress → Next-Night Sleep
+        if not sleep_df.empty:
+            sleep_col = "score" if "score" in sleep_df.columns else None
+            if sleep_col:
+                stress_shifted = stress_df[["day", "stress_high"]].copy()
+                stress_shifted["day"] = stress_shifted["day"] + pd.Timedelta(days=1)
+                merged = stress_shifted.merge(sleep_df[["day", sleep_col]], on="day")
+                if len(merged) >= MIN_DATAPOINTS:
+                    corr = _safe_corr(merged["stress_high"], merged[sleep_col])
+                    results["stress_vs_sleep"] = {
+                        "correlation": corr,
+                        "data": merged.rename(columns={sleep_col: "sleep_score"}),
+                        "x_label": "Stress (high mins)",
+                        "y_label": "Next-Night Sleep Score",
+                    }
+
+        # Stress → Next-Day Recovery
+        if not readiness_df.empty:
+            readiness_col = "score" if "score" in readiness_df.columns else None
+            if readiness_col:
+                stress_shifted = stress_df[["day", "stress_high"]].copy()
+                stress_shifted["day"] = stress_shifted["day"] + pd.Timedelta(days=1)
+                merged = stress_shifted.merge(readiness_df[["day", readiness_col]], on="day")
+                if len(merged) >= MIN_DATAPOINTS:
+                    corr = _safe_corr(merged["stress_high"], merged[readiness_col])
+                    results["stress_vs_recovery"] = {
+                        "correlation": corr,
+                        "data": merged.rename(columns={readiness_col: "readiness_score"}),
+                        "x_label": "Stress (high mins)",
+                        "y_label": "Next-Day Readiness Score",
+                    }
+
+        # Stress → Training Performance (same day)
+        if not workouts_df.empty:
+            daily_volume = workouts_df.groupby("day")["volume"].sum().reset_index()
+            merged = stress_df[["day", "stress_high"]].merge(daily_volume, on="day")
+            if len(merged) >= MIN_DATAPOINTS:
+                corr = _safe_corr(merged["stress_high"], merged["volume"])
+                results["stress_vs_training"] = {
+                    "correlation": corr,
+                    "data": merged,
+                    "x_label": "Stress (high mins)",
+                    "y_label": "Training Volume (kg)",
+                }
+
     # --- Nutrition & Body Composition ---
 
     if not nutrition_df.empty and not body_comp_df.empty:

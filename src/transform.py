@@ -118,6 +118,26 @@ def transform_oura_spo2(raw_dir: Path) -> pd.DataFrame:
     return df
 
 
+def transform_oura_stress(raw_dir: Path) -> pd.DataFrame:
+    """Transform Oura daily stress data."""
+    data = _load_raw_json(raw_dir / "oura", "daily_stress_*.json")
+    if not data:
+        return pd.DataFrame()
+    df = pd.json_normalize(data)
+    if "day" in df.columns:
+        df["day"] = pd.to_datetime(df["day"])
+        df = df.sort_values("day").reset_index(drop=True)
+    # Ensure numeric columns and convert seconds to minutes
+    for col in ["stress_high", "recovery_high"]:
+        if col in df.columns:
+            df[col] = pd.to_numeric(df[col], errors="coerce")
+            # Oura API returns values in seconds — convert to minutes
+            if df[col].median() > 300:
+                df[col] = (df[col] / 60).round(1)
+    logger.info("Oura stress: %d rows", len(df))
+    return df
+
+
 # --- Hevy transforms ---
 
 def transform_hevy_workouts(raw_dir: Path) -> pd.DataFrame:
@@ -175,18 +195,35 @@ def transform_hevy_workouts(raw_dir: Path) -> pd.DataFrame:
 # --- Boditrax transforms ---
 
 def transform_boditrax(raw_dir: Path) -> pd.DataFrame:
-    """Transform Boditrax scan data."""
-    # Try JSON first (from API/scraper), then check CSVs
-    data = _load_raw_json(raw_dir / "boditrax", "scans_*.json")
-    if data:
-        df = pd.json_normalize(data)
-    else:
-        # Try reading CSV files directly
-        csv_files = sorted((raw_dir / "boditrax").glob("boditrax_scan_*.csv"))
-        if not csv_files:
-            return pd.DataFrame()
-        frames = [pd.read_csv(f) for f in csv_files]
-        df = pd.concat(frames, ignore_index=True)
+    """Transform Boditrax scan data.
+
+    Prefers the most recent native CSV export (authoritative source)
+    over intermediate JSON, which may be stale from an earlier extraction.
+    """
+    boditrax_dir = raw_dir / "boditrax"
+    df = pd.DataFrame()
+
+    # Prefer native Boditrax CSV export (most recent file — full history)
+    native_files = sorted(boditrax_dir.glob("BoditraxAccount_*.csv"), reverse=True)
+    if native_files:
+        from src.sources.boditrax import BoditraxSource
+        bt = BoditraxSource(mode="csv")
+        scans = bt._parse_native_export(native_files[0], "1900-01-01", "2999-12-31")
+        if scans:
+            df = pd.json_normalize(scans)
+
+    # Fall back to simple wide-format CSVs
+    if df.empty:
+        simple_files = sorted(boditrax_dir.glob("boditrax_scan_*.csv"))
+        if simple_files:
+            frames = [pd.read_csv(f) for f in simple_files]
+            df = pd.concat(frames, ignore_index=True)
+
+    # Fall back to intermediate JSON
+    if df.empty:
+        data = _load_raw_json(boditrax_dir, "scans_*.json")
+        if data:
+            df = pd.json_normalize(data)
 
     if df.empty:
         return df
@@ -212,11 +249,33 @@ def transform_mfp(raw_dir: Path) -> pd.DataFrame:
         df = df.sort_values("day").reset_index(drop=True)
 
     # Ensure numeric columns
-    for col in ["calories", "protein", "carbohydrates", "fat", "sodium", "sugar"]:
+    numeric_cols = [
+        "calories", "protein", "carbohydrates", "fat", "sodium", "sugar",
+        "fiber", "saturated_fat", "polyunsaturated_fat", "monounsaturated_fat",
+        "trans_fat", "cholesterol", "potassium", "vitamin_a", "vitamin_c",
+        "calcium", "iron",
+    ]
+    for col in numeric_cols:
         if col in df.columns:
             df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0)
 
     logger.info("MFP nutrition: %d days", len(df))
+    return df
+
+
+def transform_mfp_weight(raw_dir: Path) -> pd.DataFrame:
+    """Transform MFP weight measurement data."""
+    data = _load_raw_json(raw_dir / "mfp", "mfp_measurements_*.json")
+    if not data:
+        return pd.DataFrame()
+
+    df = pd.DataFrame(data)
+    if "date" in df.columns:
+        df["day"] = pd.to_datetime(df["date"])
+        df = df.sort_values("day").reset_index(drop=True)
+    if "weight_kg" in df.columns:
+        df["weight_kg"] = pd.to_numeric(df["weight_kg"], errors="coerce")
+    logger.info("MFP weight: %d measurements", len(df))
     return df
 
 
@@ -238,6 +297,7 @@ def transform_all(data_dir: Path) -> dict[str, pd.DataFrame]:
         ("activity", transform_oura_activity, "csv"),
         ("heartrate", transform_oura_heartrate, "parquet"),
         ("spo2", transform_oura_spo2, "csv"),
+        ("stress", transform_oura_stress, "csv"),
     ]:
         df = func(raw_dir)
         if not df.empty:
@@ -268,6 +328,12 @@ def transform_all(data_dir: Path) -> dict[str, pd.DataFrame]:
         mfp_df.to_csv(processed_dir / "nutrition.csv", index=False)
         datasets["nutrition"] = mfp_df
         record_counts["nutrition"] = len(mfp_df)
+
+    mfp_weight_df = transform_mfp_weight(raw_dir)
+    if not mfp_weight_df.empty:
+        mfp_weight_df.to_csv(processed_dir / "mfp_weight.csv", index=False)
+        datasets["mfp_weight"] = mfp_weight_df
+        record_counts["mfp_weight"] = len(mfp_weight_df)
 
     # Save metadata
     meta = {"transformed_at": datetime.now().isoformat(), "record_counts": record_counts}

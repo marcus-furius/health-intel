@@ -1,208 +1,272 @@
-"""MyFitnessPal source — nutrition diary and macros via python-myfitnesspal.
+"""MyFitnessPal source — nutrition, measurements, and exercise from CSV export.
 
-Auth: v2.1.2 uses browser cookies via browser_cookie3.
-On Windows without admin, we manually extract Chrome/Edge cookies
-from the correct path (Network/Cookies) and pass them to the client.
+MFP Premium allows exporting data as CSV files from the website.
+The export contains three files:
+  - Nutrition-Summary (meal-level macros/micros)
+  - Measurement-Summary (weight entries)
+  - Exercise-Summary (cardio, steps)
+
+This client reads the export directory, aggregates meal-level nutrition
+to daily totals, and produces the standard pipeline format.
 """
 
-import http.cookiejar
 import json
 import logging
-import os
-import shutil
-import sqlite3
-import tempfile
-import time
-from datetime import datetime, timedelta
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+import pandas as pd
+
 logger = logging.getLogger(__name__)
 
-MFP_DOMAINS = [".myfitnesspal.com", "www.myfitnesspal.com"]
+# Column mapping from MFP export headers to pipeline names
+NUTRITION_COL_MAP = {
+    "Date": "date",
+    "Meal": "meal",
+    "Calories": "calories",
+    "Fat (g)": "fat",
+    "Saturated Fat": "saturated_fat",
+    "Polyunsaturated Fat": "polyunsaturated_fat",
+    "Monounsaturated Fat": "monounsaturated_fat",
+    "Trans Fat": "trans_fat",
+    "Cholesterol": "cholesterol",
+    "Sodium (mg)": "sodium",
+    "Potassium": "potassium",
+    "Carbohydrates (g)": "carbohydrates",
+    "Fiber": "fiber",
+    "Sugar": "sugar",
+    "Protein (g)": "protein",
+    "Vitamin A": "vitamin_a",
+    "Vitamin C": "vitamin_c",
+    "Calcium": "calcium",
+    "Iron": "iron",
+    "Note": "note",
+}
 
-
-def _load_chrome_cookies_manual() -> http.cookiejar.CookieJar:
-    """Manually load cookies from Chrome/Edge cookie database.
-
-    Works without admin by copying the cookie file (browser must be closed
-    or file not locked).
-    """
-    candidates = [
-        ("Chrome", Path(os.environ.get("LOCALAPPDATA", "")) / "Google/Chrome/User Data/Default/Network/Cookies"),
-        ("Edge", Path(os.environ.get("LOCALAPPDATA", "")) / "Microsoft/Edge/User Data/Default/Network/Cookies"),
-        # Legacy paths
-        ("Chrome", Path(os.environ.get("LOCALAPPDATA", "")) / "Google/Chrome/User Data/Default/Cookies"),
-        ("Edge", Path(os.environ.get("LOCALAPPDATA", "")) / "Microsoft/Edge/User Data/Default/Cookies"),
-    ]
-
-    for browser_name, cookie_path in candidates:
-        if not cookie_path.exists():
-            continue
-
-        logger.info("Trying %s cookies at %s", browser_name, cookie_path)
-        tmp_path = Path(tempfile.gettempdir()) / f"mfp_{browser_name.lower()}_cookies"
-        try:
-            shutil.copy2(cookie_path, tmp_path)
-            conn = sqlite3.connect(str(tmp_path))
-            cursor = conn.execute(
-                "SELECT host_key, name, value, path, is_secure, expires_utc "
-                "FROM cookies WHERE host_key LIKE '%myfitnesspal%'"
-            )
-            rows = cursor.fetchall()
-            conn.close()
-            os.unlink(tmp_path)
-
-            if not rows:
-                logger.info("No MFP cookies found in %s", browser_name)
-                continue
-
-            cj = http.cookiejar.CookieJar()
-            for host_key, name, value, path, is_secure, expires_utc in rows:
-                cookie = http.cookiejar.Cookie(
-                    version=0, name=name, value=value,
-                    port=None, port_specified=False,
-                    domain=host_key, domain_specified=True, domain_initial_dot=host_key.startswith("."),
-                    path=path or "/", path_specified=bool(path),
-                    secure=bool(is_secure),
-                    expires=expires_utc if expires_utc else None,
-                    discard=not bool(expires_utc),
-                    comment=None, comment_url=None,
-                    rest={}, rfc2109=False,
-                )
-                cj.set_cookie(cookie)
-
-            logger.info("Loaded %d MFP cookies from %s", len(rows), browser_name)
-            return cj
-
-        except Exception:
-            logger.warning("Failed to read %s cookies, trying next browser", browser_name, exc_info=True)
-            if tmp_path.exists():
-                os.unlink(tmp_path)
-            continue
-
-    raise RuntimeError(
-        "Could not load MFP cookies from any browser. "
-        "Ensure you are logged into MyFitnessPal in Chrome or Edge."
-    )
+# Numeric columns to aggregate per day
+NUMERIC_COLS = [
+    "calories", "fat", "saturated_fat", "polyunsaturated_fat",
+    "monounsaturated_fat", "trans_fat", "cholesterol", "sodium",
+    "potassium", "carbohydrates", "fiber", "sugar", "protein",
+    "vitamin_a", "vitamin_c", "calcium", "iron",
+]
 
 
 class MfpSource:
-    """Client for MyFitnessPal via python-myfitnesspal library."""
+    """Client for MyFitnessPal via Premium CSV export."""
 
     def __init__(self) -> None:
-        self._client = None
+        pass
 
-    def _get_client(self) -> Any:
-        """Lazy-init the MFP client."""
-        if self._client is None:
-            import myfitnesspal
+    def _find_export_dir(self, raw_dir: Path) -> Path | None:
+        """Find the most recent MFP export directory."""
+        export_dirs = sorted(
+            [d for d in raw_dir.iterdir() if d.is_dir() and d.name.startswith("File-Export-")],
+            reverse=True,
+        )
+        if export_dirs:
+            return export_dirs[0]
+        return None
 
-            # Try standard browser_cookie3 first, fall back to manual extraction
-            try:
-                self._client = myfitnesspal.Client()
-                logger.info("MFP client authenticated via browser_cookie3")
-            except Exception:
-                logger.info("browser_cookie3 failed, trying manual cookie extraction")
-                cookiejar = _load_chrome_cookies_manual()
-                self._client = myfitnesspal.Client(cookiejar=cookiejar)
-                logger.info("MFP client authenticated via manual cookie extraction")
-        return self._client
+    def _find_csv(self, export_dir: Path, prefix: str) -> Path | None:
+        """Find a CSV file by prefix within the export directory."""
+        matches = list(export_dir.glob(f"{prefix}*.csv"))
+        return matches[0] if matches else None
 
-    def pull(self, start_date: str, end_date: str) -> dict[str, list[dict[str, Any]]]:
-        """Pull daily nutrition data from MFP day by day.
+    def _parse_nutrition(self, csv_path: Path, start_date: str, end_date: str) -> list[dict[str, Any]]:
+        """Parse Nutrition-Summary CSV and aggregate meals to daily totals."""
+        df = pd.read_csv(csv_path)
+        df = df.rename(columns=NUTRITION_COL_MAP)
 
-        Adds 0.5s delay between requests to avoid rate limiting.
+        # Ensure date column and filter to range
+        df["date"] = pd.to_datetime(df["date"]).dt.strftime("%Y-%m-%d")
+        df = df[(df["date"] >= start_date) & (df["date"] <= end_date)]
+
+        if df.empty:
+            return []
+
+        # Coerce numeric columns
+        for col in NUMERIC_COLS:
+            if col in df.columns:
+                df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0)
+
+        # Build per-meal breakdown before aggregating
+        meal_details: dict[str, list[dict[str, Any]]] = {}
+        for _, row in df.iterrows():
+            date = row["date"]
+            meal_details.setdefault(date, [])
+            meal_entry = {"name": row.get("meal", "Unknown")}
+            for col in NUMERIC_COLS:
+                if col in row:
+                    meal_entry[col] = float(row[col])
+            meal_details[date].append(meal_entry)
+
+        # Aggregate to daily totals
+        agg_cols = [col for col in NUMERIC_COLS if col in df.columns]
+        daily = df.groupby("date")[agg_cols].sum().reset_index()
+
+        entries: list[dict[str, Any]] = []
+        for _, row in daily.iterrows():
+            date = row["date"]
+            totals = {col: float(row[col]) for col in agg_cols}
+            entries.append({
+                "date": date,
+                **totals,
+                "totals": totals,
+                "meals": meal_details.get(date, []),
+            })
+
+        return entries
+
+    def _parse_measurements(self, csv_path: Path, start_date: str, end_date: str) -> list[dict[str, Any]]:
+        """Parse Measurement-Summary CSV (weight entries)."""
+        df = pd.read_csv(csv_path)
+        df.columns = [c.strip().lower() for c in df.columns]
+
+        if "date" not in df.columns:
+            return []
+
+        df["date"] = pd.to_datetime(df["date"]).dt.strftime("%Y-%m-%d")
+        df = df[(df["date"] >= start_date) & (df["date"] <= end_date)]
+
+        entries: list[dict[str, Any]] = []
+        for _, row in df.iterrows():
+            entry = {"date": row["date"]}
+            if "weight" in row:
+                entry["weight_kg"] = float(row["weight"])
+            entries.append(entry)
+
+        return entries
+
+    def _parse_exercise(self, csv_path: Path, start_date: str, end_date: str) -> list[dict[str, Any]]:
+        """Parse Exercise-Summary CSV."""
+        df = pd.read_csv(csv_path)
+        df.columns = [c.strip() for c in df.columns]
+
+        col_map = {
+            "Date": "date",
+            "Exercise": "exercise",
+            "Type": "type",
+            "Exercise Calories": "exercise_calories",
+            "Exercise Minutes": "exercise_minutes",
+            "Sets": "sets",
+            "Reps Per Set": "reps_per_set",
+            "Kilograms": "kilograms",
+            "Steps": "steps",
+            "Note": "note",
+        }
+        df = df.rename(columns=col_map)
+
+        if "date" not in df.columns:
+            return []
+
+        df["date"] = pd.to_datetime(df["date"]).dt.strftime("%Y-%m-%d")
+        df = df[(df["date"] >= start_date) & (df["date"] <= end_date)]
+
+        entries: list[dict[str, Any]] = []
+        for _, row in df.iterrows():
+            entry = {}
+            for col in ["date", "exercise", "type", "exercise_calories",
+                        "exercise_minutes", "sets", "reps_per_set", "kilograms",
+                        "steps", "note"]:
+                if col in row and pd.notna(row[col]):
+                    entry[col] = row[col]
+                    if isinstance(entry[col], float) and entry[col] == int(entry[col]):
+                        entry[col] = int(entry[col])
+            entries.append(entry)
+
+        return entries
+
+    def pull(self, start_date: str, end_date: str, raw_dir: Path | None = None) -> dict[str, list[dict[str, Any]]]:
+        """Read MFP CSV export and return structured data.
+
+        Looks for a File-Export-* directory inside raw_dir containing
+        Nutrition-Summary, Measurement-Summary, and Exercise-Summary CSVs.
         """
-        client = self._get_client()
-        start = datetime.strptime(start_date, "%Y-%m-%d").date()
-        end = datetime.strptime(end_date, "%Y-%m-%d").date()
+        if raw_dir is None:
+            logger.warning("No raw directory provided for MFP CSV import")
+            return {"diary": [], "measurements": [], "exercise": []}
 
-        diary_entries: list[dict[str, Any]] = []
-        current = start
+        export_dir = self._find_export_dir(raw_dir)
+        if export_dir is None:
+            logger.warning("No MFP export directory found in %s", raw_dir)
+            return {"diary": [], "measurements": [], "exercise": []}
 
-        while current <= end:
-            try:
-                day_data = client.get_date(current.year, current.month, current.day)
-                entry = self._serialize_day(current, day_data)
-                diary_entries.append(entry)
-            except Exception:
-                logger.warning("MFP: failed to fetch data for %s, recording as empty day", current)
-                diary_entries.append(self._empty_day(current))
-
-            current += timedelta(days=1)
-            time.sleep(0.5)
-
-            if len(diary_entries) % 30 == 0:
-                logger.info("MFP: pulled %d days so far...", len(diary_entries))
-
-        logger.info("MFP: pulled %d diary days total", len(diary_entries))
-        return {"diary": diary_entries}
-
-    def _serialize_day(self, date: Any, day_data: Any) -> dict[str, Any]:
-        """Convert a MFP day object to a serialisable dict."""
-        totals = day_data.totals if hasattr(day_data, "totals") else {}
-        meals_data = []
-        if hasattr(day_data, "meals"):
-            for meal in day_data.meals:
-                meal_items = []
-                if hasattr(meal, "entries"):
-                    for item in meal.entries:
-                        meal_items.append({
-                            "name": str(item.name) if hasattr(item, "name") else str(item),
-                            "nutrition": dict(item.nutrition_information) if hasattr(item, "nutrition_information") else {},
-                        })
-                meals_data.append({
-                    "name": str(meal.name) if hasattr(meal, "name") else "Unknown",
-                    "items": meal_items,
-                })
-
-        return {
-            "date": str(date),
-            "totals": dict(totals) if totals else {},
-            "meals": meals_data,
-            "calories": totals.get("calories", 0) if totals else 0,
-            "protein": totals.get("protein", 0) if totals else 0,
-            "carbohydrates": totals.get("carbohydrates", 0) if totals else 0,
-            "fat": totals.get("fat", 0) if totals else 0,
-            "sodium": totals.get("sodium", 0) if totals else 0,
-            "sugar": totals.get("sugar", 0) if totals else 0,
+        logger.info("Using MFP export: %s", export_dir.name)
+        result: dict[str, list[dict[str, Any]]] = {
+            "diary": [],
+            "measurements": [],
+            "exercise": [],
         }
 
-    def _empty_day(self, date: Any) -> dict[str, Any]:
-        """Return a zero-calorie day record (gaps are analytically meaningful)."""
-        return {
-            "date": str(date),
-            "totals": {},
-            "meals": [],
-            "calories": 0,
-            "protein": 0,
-            "carbohydrates": 0,
-            "fat": 0,
-            "sodium": 0,
-            "sugar": 0,
-        }
+        # Nutrition
+        nutrition_csv = self._find_csv(export_dir, "Nutrition-Summary")
+        if nutrition_csv:
+            result["diary"] = self._parse_nutrition(nutrition_csv, start_date, end_date)
+            logger.info("MFP nutrition: %d daily entries from %s", len(result["diary"]), nutrition_csv.name)
+        else:
+            logger.warning("No Nutrition-Summary CSV found in %s", export_dir)
+
+        # Measurements
+        measurement_csv = self._find_csv(export_dir, "Measurement-Summary")
+        if measurement_csv:
+            result["measurements"] = self._parse_measurements(measurement_csv, start_date, end_date)
+            logger.info("MFP measurements: %d entries from %s", len(result["measurements"]), measurement_csv.name)
+        else:
+            logger.info("No Measurement-Summary CSV found in %s", export_dir)
+
+        # Exercise
+        exercise_csv = self._find_csv(export_dir, "Exercise-Summary")
+        if exercise_csv:
+            result["exercise"] = self._parse_exercise(exercise_csv, start_date, end_date)
+            logger.info("MFP exercise: %d entries from %s", len(result["exercise"]), exercise_csv.name)
+        else:
+            logger.info("No Exercise-Summary CSV found in %s", export_dir)
+
+        return result
 
     def save_raw(self, data: dict[str, list[dict[str, Any]]], raw_dir: Path,
                  start_date: str, end_date: str) -> dict[str, int]:
-        """Save raw diary data as monthly JSON batches and return record counts."""
+        """Save parsed data as JSON and return record counts."""
         raw_dir.mkdir(parents=True, exist_ok=True)
+        counts: dict[str, int] = {}
+
+        # Save diary as monthly JSON batches (compatible with transform layer)
         diary = data.get("diary", [])
+        if diary:
+            monthly: dict[str, list[dict[str, Any]]] = {}
+            for entry in diary:
+                month_key = entry["date"][:7]
+                monthly.setdefault(month_key, []).append(entry)
 
-        monthly: dict[str, list[dict[str, Any]]] = {}
-        for entry in diary:
-            month_key = entry["date"][:7]
-            monthly.setdefault(month_key, []).append(entry)
+            for month_key, entries in monthly.items():
+                filepath = raw_dir / f"mfp_diary_{month_key}.json"
+                with open(filepath, "w", encoding="utf-8") as fh:
+                    json.dump(entries, fh, indent=2, default=str)
+                logger.info("Saved %d MFP diary entries to %s", len(entries), filepath.name)
+        counts["diary"] = len(diary)
 
-        for month_key, entries in monthly.items():
-            filepath = raw_dir / f"mfp_diary_{month_key}.json"
+        # Save measurements
+        measurements = data.get("measurements", [])
+        if measurements:
+            filepath = raw_dir / f"mfp_measurements_{start_date}_{end_date}.json"
             with open(filepath, "w", encoding="utf-8") as fh:
-                json.dump(entries, fh, indent=2, default=str)
-            logger.info("Saved %d MFP diary entries to %s", len(entries), filepath.name)
+                json.dump(measurements, fh, indent=2, default=str)
+        counts["measurements"] = len(measurements)
 
-        counts = {"diary": len(diary)}
+        # Save exercise
+        exercise = data.get("exercise", [])
+        if exercise:
+            filepath = raw_dir / f"mfp_exercise_{start_date}_{end_date}.json"
+            with open(filepath, "w", encoding="utf-8") as fh:
+                json.dump(exercise, fh, indent=2, default=str)
+        counts["exercise"] = len(exercise)
+
+        # Metadata
         meta = {
             "source": "mfp",
+            "mode": "csv",
             "last_sync": datetime.now().isoformat(),
             "start_date": start_date,
             "end_date": end_date,

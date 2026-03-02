@@ -3,5 +3,4 @@ pandas
 matplotlib
 python-dotenv
 pyarrow
-myfitnesspal
-browser_cookie3
+pytest

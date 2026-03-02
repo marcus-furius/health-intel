@@ -8,7 +8,8 @@ This project consolidates personal health and fitness data from four sources —
 
 - **Language:** Python 3.11+
 - **Package management:** `pip` with `requirements.txt`
-- **Key libraries:** `requests`, `pandas`, `matplotlib`, `python-dotenv`, `myfitnesspal`, `browser_cookie3` (Boditrax scraper only)
+- **Key libraries:** `requests`, `pandas`, `matplotlib`, `python-dotenv`, `pyarrow`
+- **Testing:** `pytest`
 - **Environment config:** `.env` file (never committed — listed in `.gitignore`)
 - **Output format:** Markdown reports with embedded base64 PNG charts
 
@@ -27,7 +28,7 @@ health-intel/
 │   │   ├── oura.py            # Oura Ring API v2 client
 │   │   ├── hevy.py            # Hevy API client
 │   │   ├── boditrax.py        # Boditrax scraper / CSV ingestion
-│   │   └── mfp.py             # MyFitnessPal client via python-myfitnesspal
+│   │   └── mfp.py             # MyFitnessPal CSV export parser
 │   ├── extract.py             # Orchestrates pulls from all sources
 │   ├── transform.py           # Cleaning, normalisation, cross-source alignment
 │   ├── correlate.py           # Cross-source correlation analysis
@@ -41,7 +42,12 @@ health-intel/
 │   └── processed/             # Cleaned, unified datasets
 ├── reports/                   # Generated markdown health reports
 └── tests/
-    └── ...
+    ├── __init__.py
+    ├── conftest.py            # Shared fixtures (sample DataFrames, MFP CSV data)
+    ├── test_transform.py      # Transform pipeline tests (20 tests)
+    ├── test_mfp.py            # MFP CSV parsing tests (15 tests)
+    ├── test_correlate.py      # Correlation analysis tests (12 tests)
+    └── test_report.py         # Report generation tests (15 tests)
 ```
 
 ## Environment Variables
@@ -53,11 +59,11 @@ OURA_TOKEN=your_oura_token
 # Hevy (requires Pro) — https://hevy.com/settings?developer
 HEVY_API_KEY=your_hevy_api_key
 
-# MyFitnessPal — uses system keyring for password storage
-# Store password first: python -m myfitnesspal store-password your_username
-MFP_USERNAME=your_mfp_username
+# MyFitnessPal — no credentials needed; uses Premium CSV export
+# Export from: https://www.myfitnesspal.com/reports
+# Place export directory in data/raw/mfp/
 
-# Boditrax — no token; uses browser cookies or manual CSV import
+# Boditrax — no token; uses native account CSV export or manual CSV import
 # Set to 'scraper' or 'csv' to control ingestion method
 BODITRAX_MODE=csv
 ```
@@ -171,59 +177,48 @@ Boditrax does **not** offer a public consumer API. Two ingestion methods are sup
 
 ### Connection Details
 
-- **Library:** `python-myfitnesspal` (PyPI: `myfitnesspal`, v2.1.2+)
-- **Auth:** Username from `.env`, password stored in system keyring
-- **No official public API** — this library scrapes authenticated session data
-- **Setup:** Run `python -m myfitnesspal store-password <username>` once to store credentials in the system keyring
+- **Method:** MFP Premium CSV export (no API, no scraping, no credentials in code)
+- **Export:** Download from MFP website → Reports → Export
+- **Setup:** Place the `File-Export-*` directory inside `data/raw/mfp/`
+- **Client:** `src/sources/mfp.py` — `MfpSource` class parses the export CSVs
 
-### Available Data
+### Export Files
 
-```python
-import myfitnesspal
+The MFP Premium export contains three CSV files:
 
-client = myfitnesspal.Client(username)
-
-# Daily food diary — returns meals with individual items and macros
-day = client.get_date(2025, 1, 15)
-
-# Measurements — weight, body fat, custom check-ins
-measurements = client.get_measurements('Weight', start_date, end_date)
-
-# Food search
-results = client.get_food_search_results("chicken breast")
-```
+| File | Purpose | Pipeline Output |
+|---|---|---|
+| `Nutrition-Summary*.csv` | Meal-level macros/micros (17 nutrient columns) | Aggregated to daily totals with per-meal breakdown |
+| `Measurement-Summary*.csv` | Weight entries | Daily weight_kg records |
+| `Exercise-Summary*.csv` | Cardio, steps, strength | Exercise entries with calories, duration, steps |
 
 ### Metrics Per Day
 
 | Metric | Source | Notes |
 |---|---|---|
-| Total calories | Diary totals | Sum of all meals |
-| Protein | Diary totals | Grams |
-| Carbohydrates | Diary totals | Grams |
-| Fat | Diary totals | Grams |
-| Sodium | Diary totals | Milligrams |
-| Sugar | Diary totals | Grams |
-| Fibre | Diary totals | Grams (if tracked) |
-| Meal breakdown | Per meal | Breakfast, Lunch, Dinner, Snacks |
-| Individual food items | Per meal | Name, brand, serving size, per-item macros |
-| Weight | Measurements | kg (if logged in MFP) |
+| Total calories | Nutrition-Summary | Sum of all meals |
+| Protein | Nutrition-Summary | Grams |
+| Carbohydrates | Nutrition-Summary | Grams |
+| Fat | Nutrition-Summary | Grams |
+| Sodium | Nutrition-Summary | Milligrams |
+| Sugar | Nutrition-Summary | Grams |
+| Fiber | Nutrition-Summary | Grams |
+| Saturated/Poly/Mono/Trans fat | Nutrition-Summary | Grams |
+| Cholesterol, Potassium, Vitamins A/C, Calcium, Iron | Nutrition-Summary | Various units |
+| Meal breakdown | Nutrition-Summary | Breakfast, Lunch, Dinner, Snacks with per-meal macros |
+| Weight | Measurement-Summary | kg (if logged in MFP) |
+| Exercise | Exercise-Summary | Type, calories, duration, steps |
 
 ### MFP-Specific Rules
 
-- Pull data day-by-day using `client.get_date()` — there is no bulk date range endpoint
-- Batch pulls by iterating over date range; add a small delay (0.5s) between requests to avoid rate limiting
-- Days with no entries return empty meals — store these as zero-calorie days, do not skip them (gaps in nutrition tracking are themselves informative)
+- `MfpSource._find_export_dir()` picks the most recent `File-Export-*` directory by name sort
+- Meal-level rows are aggregated to daily totals; per-meal breakdown preserved in `meals` list
+- Days with no entries result in zero-calorie days — do not skip them (gaps in nutrition tracking are themselves informative)
 - MFP weight measurements may overlap with Boditrax weight — use Boditrax as the authoritative source for weight, MFP as supplementary
 - Normalise all macros to grams, calories to kcal
 - Calculate derived metrics: protein per kg bodyweight (using latest Boditrax weight), caloric surplus/deficit (MFP calories vs Oura active calories + BMR)
-- Store raw day data as JSON: `mfp_diary_YYYY-MM-DD.json`
-- For bulk historical pulls, batch into monthly files: `mfp_diary_2025-01.json`
-
-### Credential Security
-
-- Never store MFP password in `.env`, code, or data files
-- Always use system keyring via `python -m myfitnesspal store-password`
-- If running on a headless server or CI, document an alternative auth approach in a `SETUP.md`
+- `save_raw()` batches diary entries into monthly JSON files: `mfp_diary_2026-01.json`
+- NaN values in exercise data are excluded from output dicts
 
 ---
 
@@ -302,11 +297,16 @@ The real value of this project is connecting the four data streams. The report g
 - Reports go in `reports/` as markdown named `health_report_YYYY-MM-DD.md`
 - Every report must include:
   - **Date range** covered
-  - **Nutrition** (MFP): average daily calories, macro split (protein/carbs/fat as g and %), protein per kg bodyweight, caloric consistency, surplus/deficit estimate
-  - **Sleep & Recovery** (Oura): average scores, duration trends, HRV trajectory
+  - **Nutrition** (MFP): average daily calories, macro split (protein/carbs/fat as g and %), protein per kg bodyweight, caloric consistency, surplus/deficit estimate, meal calorie distribution
+  - **Sleep & Recovery** (Oura): average scores, duration trends, HRV trajectory, sleep stage breakdown
+  - **Stress & Recovery Balance** (Oura): stress/recovery minutes, ratio, weekly trend, day summary distribution
   - **Training** (Hevy): sessions per week, total volume trends, progressive overload tracking, muscle group distribution
-  - **Body Composition** (Boditrax): latest scan results, trend since previous scan, trajectory charts
+  - **Body Composition** (Boditrax): latest scan results, trend since previous scan, trajectory charts, MFP weight overlay
+  - **Activity** (Oura): daily steps, active calories, movement trends
+  - **Heart Rate** (Oura): RHR average, weekly trend, HR variability
+  - **SpO2** (Oura): average SpO2, trend chart, breathing disturbance index
   - **Correlations**: cross-source insights as described above
+  - **Alerts & Interventions**: 15+ alert types with severity levels (high/medium/low/positive) and actionable recommendations
   - **Summary**: top 3–5 actionable observations
 - Charts: generate with matplotlib, embed as base64 PNGs in markdown
 - Use clean, minimal chart styling — no gridline clutter, clear axis labels
@@ -322,18 +322,26 @@ The real value of this project is connecting the four data streams. The report g
 - Validate API responses against expected schema before processing
 - If `.env` is missing required tokens, log which sources are unavailable and proceed with the rest
 - If Boditrax scraper fails, fall back to CSV mode and log the error
-- If MFP keyring credentials are missing, log a clear error with setup instructions and skip MFP
+- If MFP CSV export directory is missing, log a warning and skip MFP
 - The pipeline should always produce a report even if one or more sources are unavailable — just note the gaps
+
+## Testing
+
+- **Framework:** pytest
+- **Run:** `.venv/bin/pytest tests/ -v`
+- **62 tests** across 4 test files — all tests run without API calls or real data
+- `tests/conftest.py` provides shared fixtures: sample DataFrames (30-row daily series, 5-row body comp) and MFP CSV content
+- Tests use `tmp_path` for filesystem interaction (JSON/CSV files written to temp directories)
+- When adding new transform/source functions, add corresponding tests with small inline fixture data
+- When modifying report sections, add or update smoke tests that verify the section returns a string containing expected headings
 
 ## What Not to Do
 
 - Do not hardcode any API tokens, keys, or passwords
 - Do not commit `.env` or raw API tokens
-- Do not store MFP password anywhere except the system keyring
 - Do not use `print()` for logging — use the `logging` module
 - Do not store heart rate data in CSV — use parquet
 - Do not interpolate Boditrax body composition between scans
 - Do not regenerate reports without confirming the date range with the user
 - Do not make assumptions about Hevy weight units — always check and normalise to kg
 - Do not skip zero-calorie MFP days — logging gaps are analytically meaningful
-- Do not hammer MFP with rapid requests — add 0.5s delay between day pulls

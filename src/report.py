@@ -788,11 +788,13 @@ def _recent_trend(series: pd.Series, window: int = 28) -> float | None:
     return numerator / denominator
 
 
-def _alerts_section(datasets: dict[str, pd.DataFrame], correlations: dict[str, Any]) -> str:
-    """Generate alerts with severity levels and actionable interventions."""
-    lines = ["## Alerts & Interventions", ""]
+def compute_alerts(datasets: dict[str, pd.DataFrame], correlations: dict[str, Any]) -> list[dict[str, str]]:
+    """Compute structured alerts from datasets and correlations.
 
-    alerts: list[dict[str, str]] = []  # Each: {severity, icon, title, detail, intervention}
+    Returns a list of dicts, each with keys: severity, title, detail, intervention.
+    Sorted by severity (high → medium → low → positive).
+    """
+    alerts: list[dict[str, str]] = []
 
     sleep_df = datasets.get("sleep", pd.DataFrame())
     readiness_df = datasets.get("readiness", pd.DataFrame())
@@ -1145,15 +1147,21 @@ def _alerts_section(datasets: dict[str, pd.DataFrame], correlations: dict[str, A
                 ),
             })
 
-    # ── Format Output ──
+    # Sort by severity
+    severity_order = {"high": 0, "medium": 1, "low": 2, "positive": 3}
+    alerts.sort(key=lambda a: severity_order.get(a["severity"], 99))
+
+    return alerts
+
+
+def _alerts_section(datasets: dict[str, pd.DataFrame], correlations: dict[str, Any]) -> str:
+    """Generate alerts markdown section."""
+    lines = ["## Alerts & Interventions", ""]
+    alerts = compute_alerts(datasets, correlations)
 
     if not alerts:
         lines.append("No alerts to report — all metrics are within healthy ranges.\n")
         return "\n".join(lines)
-
-    # Sort by severity
-    severity_order = {"high": 0, "medium": 1, "low": 2, "positive": 3}
-    alerts.sort(key=lambda a: severity_order.get(a["severity"], 99))
 
     severity_icons = {"high": "🔴", "medium": "🟡", "low": "🔵", "positive": "🟢"}
 
@@ -1165,8 +1173,7 @@ def _alerts_section(datasets: dict[str, pd.DataFrame], correlations: dict[str, A
         lines.append(alert["intervention"])
         lines.append("")
 
-    # Alert summary count
-    counts = {}
+    counts: dict[str, int] = {}
     for alert in alerts:
         counts[alert["severity"]] = counts.get(alert["severity"], 0) + 1
     summary_parts = []

@@ -4,3 +4,5 @@ matplotlib
 python-dotenv
 pyarrow
 pytest
+fastapi
+uvicorn[standard]

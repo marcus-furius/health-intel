@@ -9,3 +9,7 @@ dist/
 build/
 .pytest_cache/
 *.parquet
+
+# Dashboard
+dashboard/node_modules/
+dashboard/dist/

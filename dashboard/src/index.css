@@ -1,0 +1,77 @@
+@import "tailwindcss";
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
+@theme {
+  --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
+  --color-bg-base: #0A0A0B;
+  --color-bg-card: #141416;
+  --color-bg-elevated: #1C1C1F;
+  --color-text-primary: #F4F4F5;
+  --color-text-secondary: #A1A1AA;
+  --color-text-muted: #71717A;
+  --color-border-subtle: #27272A;
+  --color-border-default: #3F3F46;
+  --color-chart-blue: #3B82F6;
+  --color-chart-emerald: #10B981;
+  --color-chart-amber: #F59E0B;
+  --color-chart-rose: #F43F5E;
+  --color-chart-violet: #8B5CF6;
+  --color-chart-orange: #F97316;
+  --color-chart-cyan: #06B6D4;
+}
+
+*, *::before, *::after {
+  transition-property: background-color, border-color, color;
+  transition-duration: 150ms;
+  transition-timing-function: ease-out;
+}
+
+body {
+  font-family: var(--font-sans);
+  background: var(--color-bg-base);
+  color: var(--color-text-primary);
+  margin: 0;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+.light {
+  --color-bg-base: #FAFAFA;
+  --color-bg-card: #FFFFFF;
+  --color-bg-elevated: #F4F4F5;
+  --color-text-primary: #18181B;
+  --color-text-secondary: #52525B;
+  --color-text-muted: #A1A1AA;
+  --color-border-subtle: #E4E4E7;
+  --color-border-default: #D4D4D8;
+}
+
+/* Recharts tooltip override */
+.recharts-default-tooltip {
+  background: var(--color-bg-elevated) !important;
+  border: 1px solid var(--color-border-default) !important;
+  border-radius: 0.5rem !important;
+  box-shadow: 0 4px 12px rgb(0 0 0 / 0.3) !important;
+}
+.recharts-tooltip-label {
+  color: var(--color-text-primary) !important;
+  font-weight: 500 !important;
+}
+.recharts-tooltip-item {
+  color: var(--color-text-secondary) !important;
+}
+
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--color-border-default); border-radius: 3px; }
+
+@media print {
+  .no-print { display: none !important; }
+  body { background: white !important; color: black !important; }
+  main { margin-left: 0 !important; padding: 1rem !important; max-width: 100% !important; }
+  * { transition: none !important; }
+  .bg-bg-card { background: white !important; border-color: #e4e4e7 !important; }
+  .text-text-primary { color: #18181b !important; }
+  .text-text-secondary { color: #52525b !important; }
+  .text-text-muted { color: #a1a1aa !important; }
+}

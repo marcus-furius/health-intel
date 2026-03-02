@@ -2,22 +2,24 @@
 
 ## Project Overview
 
-This project consolidates personal health and fitness data from four sources — **Oura Ring** (sleep, recovery, HRV), **Hevy** (strength training), **Boditrax** (body composition), and **MyFitnessPal** (nutrition) — into a single data pipeline. Raw data is stored as structured files, transformations are reproducible, and markdown health reports are generated with trend analysis and cross-source correlations. Everything follows a **data-as-code** approach — version-controlled and reproducible.
+This project consolidates personal health and fitness data from four sources — **Oura Ring** (sleep, recovery, HRV), **Hevy** (strength training), **Boditrax** (body composition), and **MyFitnessPal** (nutrition) — into a single data pipeline. Raw data is stored as structured files, transformations are reproducible, and an interactive dashboard (React + FastAPI) provides real-time visualisation with trend analysis and cross-source correlations. A static markdown report generator is also available. Everything follows a **data-as-code** approach — version-controlled and reproducible.
 
 ## Tech Stack & Conventions
 
-- **Language:** Python 3.11+
-- **Package management:** `pip` with `requirements.txt`
-- **Key libraries:** `requests`, `pandas`, `matplotlib`, `python-dotenv`, `pyarrow`
+- **Language:** Python 3.11+ (pipeline + API), TypeScript (dashboard)
+- **Package management:** `pip` with `requirements.txt` (Python), `npm` (dashboard)
+- **Backend libraries:** `requests`, `pandas`, `matplotlib`, `python-dotenv`, `pyarrow`, `fastapi`, `uvicorn`
+- **Frontend stack:** React 18, Vite, Tailwind CSS, Recharts, TanStack Query, Lucide React
 - **Testing:** `pytest`
 - **Environment config:** `.env` file (never committed — listed in `.gitignore`)
-- **Output format:** Markdown reports with embedded base64 PNG charts
+- **Output formats:** Interactive dashboard (primary) + Markdown reports with embedded base64 PNG charts (archival)
 
 ## Project Structure
 
 ```
 health-intel/
 ├── CLAUDE.md                  # This file — project instructions for Claude Code
+├── README.md                  # Project overview and setup guide
 ├── .env                       # API tokens and credentials (not committed)
 ├── .gitignore
 ├── requirements.txt
@@ -29,17 +31,30 @@ health-intel/
 │   │   ├── hevy.py            # Hevy API client
 │   │   ├── boditrax.py        # Boditrax scraper / CSV ingestion
 │   │   └── mfp.py             # MyFitnessPal CSV export parser
+│   ├── api/
+│   │   ├── __init__.py
+│   │   ├── server.py          # FastAPI app, CORS, lifespan CSV loader
+│   │   └── routes.py          # All API endpoints with Pydantic models
 │   ├── extract.py             # Orchestrates pulls from all sources
 │   ├── transform.py           # Cleaning, normalisation, cross-source alignment
 │   ├── correlate.py           # Cross-source correlation analysis
-│   └── report.py              # Markdown report generation with charts
+│   └── report.py              # Markdown report generation + compute_alerts()
+├── dashboard/                 # React frontend (Vite + Tailwind + Recharts)
+│   ├── package.json
+│   ├── vite.config.ts         # Proxy /api → :8000, chunk splitting
+│   └── src/
+│       ├── App.tsx            # Router, QueryClient, theme, lazy-loaded pages
+│       ├── components/
+│       │   ├── layout/        # Shell, Sidebar, Header
+│       │   ├── charts/        # TrendChart, BarChart, StackedBar, ScatterPlot, SparkLine
+│       │   └── ui/            # MetricCard, AlertCard, ChartCard, Badge, DateRangePicker, Skeleton
+│       ├── pages/             # Overview, SleepRecovery, Training, Nutrition, BodyComposition, Correlations, Alerts
+│       ├── hooks/             # TanStack Query hooks, useDateRange, useTheme
+│       └── lib/               # api.ts, colors.ts, format.ts
+├── design/                    # Dashboard design plans
 ├── data/
-│   ├── raw/
-│   │   ├── oura/              # Raw JSON from Oura API
-│   │   ├── hevy/              # Raw JSON from Hevy API
-│   │   ├── boditrax/          # Scraped JSON or manually placed CSVs
-│   │   └── mfp/               # Raw JSON from MyFitnessPal
-│   └── processed/             # Cleaned, unified datasets
+│   ├── raw/                   # Immutable raw data from sources
+│   └── processed/             # Cleaned CSVs consumed by API and report generator
 ├── reports/                   # Generated markdown health reports
 └── tests/
     ├── __init__.py
@@ -314,6 +329,66 @@ The real value of this project is connecting the four data streams. The report g
 - Always include a brief narrative interpretation beneath each chart
 - If a data source has no new data since last report, note this and carry forward the last known values
 - Include a **nutrition compliance** metric: % of days in the period with complete food logging
+
+## Dashboard & API
+
+### Running the Dashboard
+
+```bash
+# Backend (FastAPI on port 8000)
+.venv/bin/uvicorn src.api.server:app --port 8000 --reload
+
+# Frontend (Vite dev server on port 5173, proxies /api → :8000)
+cd dashboard && npm run dev
+
+# Or both together
+cd dashboard && npm run dev:full
+```
+
+### API Design
+
+- FastAPI loads all `data/processed/*.csv` into memory at startup (~5K rows)
+- All endpoints are under `/api/` prefix
+- List endpoints accept optional `start` and `end` query params (ISO dates)
+- `POST /api/reload` re-reads CSVs after a pipeline run
+- Pydantic response models on structured endpoints (`/api/overview`, `/api/correlations`)
+- NaN/inf values are converted to `null` in JSON responses
+
+### Key API Endpoints
+
+| Endpoint | Returns |
+|---|---|
+| `GET /api/overview` | KPI summary, 30-day sparklines, alert counts |
+| `GET /api/sleep` | Daily sleep data |
+| `GET /api/readiness` | Daily readiness + HRV balance |
+| `GET /api/activity` | Daily steps, active calories |
+| `GET /api/stress` | Daily stress/recovery minutes |
+| `GET /api/spo2` | Daily SpO2 + breathing index |
+| `GET /api/training` | Set-level data + daily summaries |
+| `GET /api/training/exercises` | Per-exercise volume history |
+| `GET /api/training/muscle-groups` | Volume by muscle group |
+| `GET /api/nutrition` | Daily nutrition data |
+| `GET /api/body-composition` | All Boditrax scans |
+| `GET /api/weight` | Combined Boditrax + MFP weight series |
+| `GET /api/correlations` | All r-values + scatter data |
+| `GET /api/alerts` | Structured alerts with severity + interventions |
+
+### Dashboard Architecture
+
+- **React 18 + TypeScript** with Vite, lazy-loaded page routes
+- **TanStack Query** for data fetching with 5-minute stale time
+- **Tailwind CSS** with custom theme tokens (dark mode default, light toggle)
+- **Recharts** for all charts (area, line, bar, stacked bar, scatter)
+- `src/report.py:compute_alerts()` is the shared alert logic — called by both the API (returns JSON) and `_alerts_section()` (formats markdown)
+- `src/correlate.py:compute_correlations()` is called directly by the API
+
+### Dashboard Coding Standards
+
+- Chart components accept generic `Record<string, unknown>[]` data arrays
+- All date formatting uses `lib/format.ts` helpers
+- Design tokens (colors, severity mappings) are in `lib/colors.ts`
+- Pages follow a consistent layout: Header → KPI cards grid → chart cards grid
+- The `no-print` CSS class hides elements during PDF/print export
 
 ## Error Handling
 

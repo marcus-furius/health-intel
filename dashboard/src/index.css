@@ -65,13 +65,81 @@ body {
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: var(--color-border-default); border-radius: 3px; }
 
+/* Print-only header — hidden on screen */
+.print-header {
+  display: none;
+}
+
 @media print {
+  @page {
+    size: A4 landscape;
+    margin: 12mm 10mm;
+  }
+
   .no-print { display: none !important; }
-  body { background: white !important; color: black !important; }
-  main { margin-left: 0 !important; padding: 1rem !important; max-width: 100% !important; }
-  * { transition: none !important; }
-  .bg-bg-card { background: white !important; border-color: #e4e4e7 !important; }
+  .print-only { display: block !important; }
+  .print-header {
+    display: flex !important;
+    justify-content: space-between;
+    align-items: baseline;
+    border-bottom: 2px solid #18181b;
+    padding-bottom: 6px;
+    margin-bottom: 16px;
+  }
+  .print-header h1 { font-size: 20px; font-weight: 700; color: #18181b; margin: 0; }
+  .print-header span { font-size: 12px; color: #71717a; }
+
+  * { transition: none !important; animation: none !important; }
+
+  body {
+    background: white !important;
+    color: #18181b !important;
+    font-size: 11px !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  main {
+    margin-left: 0 !important;
+    padding: 0 !important;
+    max-width: 100% !important;
+  }
+
+  /* Cards */
+  .bg-bg-card {
+    background: white !important;
+    border: 1px solid #d4d4d8 !important;
+    box-shadow: none !important;
+    border-radius: 8px !important;
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  /* Metric cards — smaller for print */
+  .bg-bg-card .text-4xl {
+    font-size: 24px !important;
+    line-height: 1.2 !important;
+  }
+
+  /* Text colors */
   .text-text-primary { color: #18181b !important; }
-  .text-text-secondary { color: #52525b !important; }
-  .text-text-muted { color: #a1a1aa !important; }
+  .text-text-secondary { color: #3f3f46 !important; }
+  .text-text-muted { color: #71717a !important; }
+
+  /* Chart colors — ensure they print */
+  .recharts-surface { print-color-adjust: exact !important; -webkit-print-color-adjust: exact !important; }
+  .recharts-default-tooltip { display: none !important; }
+
+  /* Grid — keep 2-col layout */
+  .grid { gap: 12px !important; }
+
+  /* Hover effects off */
+  .hover\:border-border-default { border-color: #d4d4d8 !important; }
+  .hover\:shadow-lg { box-shadow: none !important; }
+
+  /* Scrollbar hidden */
+  ::-webkit-scrollbar { display: none !important; }
+
+  /* Recharts legend */
+  .recharts-legend-wrapper { font-size: 10px !important; }
 }

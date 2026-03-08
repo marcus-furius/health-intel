@@ -28,9 +28,11 @@ export function trendArrow(trend: number | null | undefined): string {
   return '→';
 }
 
-export function trendColor(trend: number | null | undefined): string {
+export function trendColor(trend: number | null | undefined, invert = false): string {
   if (trend == null) return 'text-text-muted';
-  if (trend > 0.1) return 'text-chart-emerald';
-  if (trend < -0.1) return 'text-chart-rose';
+  const positive = invert ? 'text-chart-rose' : 'text-chart-emerald';
+  const negative = invert ? 'text-chart-emerald' : 'text-chart-rose';
+  if (trend > 0.1) return positive;
+  if (trend < -0.1) return negative;
   return 'text-text-muted';
 }

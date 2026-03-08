@@ -9,13 +9,21 @@ interface Props {
 export default function Header({ title }: Props) {
   const { range, setRange } = useDateRange();
 
+  const today = new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
+
   return (
-    <header className="no-print flex items-center justify-between mb-8">
-      <h1 className="text-2xl font-semibold tracking-tight">{title}</h1>
-      <div className="flex items-center gap-3">
-        <DateRangePicker value={range} onChange={setRange} />
-        <PrintExport />
+    <>
+      <div className="print-header">
+        <h1>{title} — Health Intel</h1>
+        <span>Generated {today}</span>
       </div>
-    </header>
+      <header className="no-print flex items-center justify-between mb-8">
+        <h1 className="text-2xl font-semibold tracking-tight">{title}</h1>
+        <div className="flex items-center gap-3">
+          <DateRangePicker value={range} onChange={setRange} />
+          <PrintExport />
+        </div>
+      </header>
+    </>
   );
 }

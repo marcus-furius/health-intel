@@ -6,15 +6,19 @@ import pandas as pd
 import pytest
 
 from src.transform import (
+    _dedup_by_day,
     _load_all_json,
     _load_raw_json,
+    _validate_ranges,
     transform_boditrax,
     transform_hevy_workouts,
     transform_mfp,
     transform_mfp_weight,
     transform_oura_activity,
+    transform_oura_heartrate,
     transform_oura_readiness,
     transform_oura_sleep,
+    transform_oura_spo2,
     transform_oura_stress,
 )
 
@@ -22,16 +26,19 @@ from src.transform import (
 # --- Helper functions ---
 
 
-def test_load_raw_json_returns_most_recent(tmp_path):
-    """Two JSON files — the most recent (by name sort) should be loaded."""
-    old = [{"day": "2026-01-01", "score": 70}]
-    new = [{"day": "2026-02-01", "score": 85}]
+def test_load_raw_json_combines_and_dedupes(tmp_path):
+    """Two JSON files with overlapping days — deduped, newest file wins."""
+    old = [{"day": "2026-01-01", "score": 70}, {"day": "2026-01-15", "score": 60}]
+    new = [{"day": "2026-01-15", "score": 90}, {"day": "2026-02-01", "score": 85}]
     (tmp_path / "sleep_2026-01-01_2026-01-31.json").write_text(json.dumps(old))
     (tmp_path / "sleep_2026-02-01_2026-02-28.json").write_text(json.dumps(new))
 
     result = _load_raw_json(tmp_path, "sleep_*.json")
-    assert len(result) == 1
-    assert result[0]["score"] == 85
+    assert len(result) == 3  # 3 unique days
+    # Newest file is sorted first, so 2026-01-15 gets score 90 (from new file)
+    jan15 = [r for r in result if r["day"] == "2026-01-15"]
+    assert len(jan15) == 1
+    assert jan15[0]["score"] == 90
 
 
 def test_load_raw_json_empty_dir(tmp_path):
@@ -127,6 +134,60 @@ def test_transform_oura_stress_converts_seconds(tmp_path):
 def test_transform_oura_stress_empty(tmp_path):
     (tmp_path / "oura").mkdir(parents=True, exist_ok=True)
     df = transform_oura_stress(tmp_path)
+    assert df.empty
+
+
+# --- Oura heart rate transforms ---
+
+
+def test_transform_oura_heartrate_basic(tmp_path):
+    """Heart rate data should be aggregated to daily summaries."""
+    records = [
+        {"timestamp": "2026-01-01T08:00:00+00:00", "bpm": 60, "source": "rest"},
+        {"timestamp": "2026-01-01T12:00:00+00:00", "bpm": 80, "source": "rest"},
+        {"timestamp": "2026-01-01T22:00:00+00:00", "bpm": 55, "source": "rest"},
+        {"timestamp": "2026-01-02T09:00:00+00:00", "bpm": 62, "source": "rest"},
+        {"timestamp": "2026-01-02T14:00:00+00:00", "bpm": 75, "source": "rest"},
+    ]
+    _write_oura_json(tmp_path, "heartrate", records)
+    df = transform_oura_heartrate(tmp_path)
+
+    assert len(df) == 2  # Two days
+    assert "hr_mean" in df.columns
+    assert "hr_min" in df.columns
+    assert "hr_max" in df.columns
+    assert pd.api.types.is_datetime64_any_dtype(df["day"])
+    # Day 1: min=55, max=80
+    day1 = df[df["day"] == pd.Timestamp("2026-01-01")]
+    assert day1["hr_min"].iloc[0] == 55
+    assert day1["hr_max"].iloc[0] == 80
+
+
+def test_transform_oura_heartrate_empty(tmp_path):
+    (tmp_path / "oura").mkdir(parents=True, exist_ok=True)
+    df = transform_oura_heartrate(tmp_path)
+    assert df.empty
+
+
+# --- Oura SpO2 transforms ---
+
+
+def test_transform_oura_spo2_basic(tmp_path):
+    records = [
+        {"day": "2026-01-01", "id": "a", "spo2_percentage": {"average": 97.5}},
+        {"day": "2026-01-02", "id": "b", "spo2_percentage": {"average": 98.0}},
+        {"day": "2026-01-03", "id": "c", "spo2_percentage": {"average": 96.8}},
+    ]
+    _write_oura_json(tmp_path, "daily_spo2", records)
+    df = transform_oura_spo2(tmp_path)
+
+    assert len(df) == 3
+    assert pd.api.types.is_datetime64_any_dtype(df["day"])
+
+
+def test_transform_oura_spo2_empty(tmp_path):
+    (tmp_path / "oura").mkdir(parents=True, exist_ok=True)
+    df = transform_oura_spo2(tmp_path)
     assert df.empty
 
 
@@ -301,3 +362,80 @@ def test_transform_mfp_empty(tmp_path):
     (tmp_path / "mfp").mkdir(parents=True, exist_ok=True)
     df = transform_mfp(tmp_path)
     assert df.empty
+
+
+# --- Data quality validation ---
+
+
+class TestValidateRanges:
+    def test_clamps_out_of_range(self):
+        """Values outside valid range should become NaN."""
+        df = pd.DataFrame({"score": [50, 110, -5, 75]})
+        result = _validate_ranges(df, "test")
+        assert pd.isna(result["score"].iloc[1])  # 110 > 100
+        assert pd.isna(result["score"].iloc[2])  # -5 < 0
+        assert result["score"].iloc[0] == 50
+        assert result["score"].iloc[3] == 75
+
+    def test_leaves_valid_data_untouched(self):
+        df = pd.DataFrame({"steps": [5000, 10000, 8000]})
+        result = _validate_ranges(df, "test")
+        assert list(result["steps"]) == [5000, 10000, 8000]
+
+    def test_ignores_unknown_columns(self):
+        df = pd.DataFrame({"custom_metric": [999999]})
+        result = _validate_ranges(df, "test")
+        assert result["custom_metric"].iloc[0] == 999999
+
+    def test_empty_df(self):
+        result = _validate_ranges(pd.DataFrame(), "test")
+        assert result.empty
+
+    def test_heart_rate_range(self):
+        df = pd.DataFrame({"bpm": [60, 300, 10, 120]})
+        result = _validate_ranges(df, "test")
+        assert pd.isna(result["bpm"].iloc[1])  # 300 > 250
+        assert pd.isna(result["bpm"].iloc[2])  # 10 < 25
+        assert result["bpm"].iloc[0] == 60
+
+
+# --- Dedup ---
+
+
+class TestDedupByDay:
+    def test_removes_duplicates(self):
+        dates = pd.to_datetime(["2026-01-01", "2026-01-01", "2026-01-02"])
+        df = pd.DataFrame({"day": dates, "score": [70, 80, 90]})
+        result = _dedup_by_day(df)
+        assert len(result) == 2
+        # keep="last" means the second Jan 1 row (score=80) is kept
+        jan1 = result[result["day"] == pd.Timestamp("2026-01-01")]
+        assert jan1["score"].iloc[0] == 80
+
+    def test_no_duplicates(self):
+        dates = pd.to_datetime(["2026-01-01", "2026-01-02", "2026-01-03"])
+        df = pd.DataFrame({"day": dates, "score": [70, 80, 90]})
+        result = _dedup_by_day(df)
+        assert len(result) == 3
+
+    def test_empty_df(self):
+        result = _dedup_by_day(pd.DataFrame())
+        assert result.empty
+
+    def test_no_day_column(self):
+        df = pd.DataFrame({"score": [1, 2, 3]})
+        result = _dedup_by_day(df)
+        assert len(result) == 3
+
+
+# --- Incremental load (all files combined) ---
+
+
+def test_load_raw_json_combines_all_files(tmp_path):
+    """All JSON files are loaded and combined, not just the most recent."""
+    a = [{"day": "2026-01-01", "score": 70}]
+    b = [{"day": "2026-02-01", "score": 85}]
+    (tmp_path / "sleep_2026-01-01_2026-01-31.json").write_text(json.dumps(a))
+    (tmp_path / "sleep_2026-02-01_2026-02-28.json").write_text(json.dumps(b))
+    result = _load_raw_json(tmp_path, "sleep_*.json")
+    assert len(result) == 2  # both unique days loaded

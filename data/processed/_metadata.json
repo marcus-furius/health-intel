@@ -1,12 +1,12 @@
 {
-  "transformed_at": "2026-03-02T21:16:54.117193",
+  "transformed_at": "2026-03-08T15:15:16.343988",
   "record_counts": {
-    "sleep": 360,
-    "readiness": 360,
-    "activity": 371,
+    "sleep": 349,
+    "readiness": 349,
+    "activity": 360,
     "heartrate": 2,
-    "spo2": 352,
-    "stress": 369,
+    "spo2": 341,
+    "stress": 358,
     "workouts": 2756,
     "body_composition": 74,
     "nutrition": 248,

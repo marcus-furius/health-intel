@@ -45,6 +45,8 @@ def sample_workouts_df() -> pd.DataFrame:
         idx = i % 3
         rows.append({
             "day": dates[i],
+            "workout_title": f"Session {i // 3 + 1}",
+            "duration_seconds": 3600,
             "exercise": exercises[idx],
             "muscle_group": muscle_groups[idx],
             "weight_kg": 60 + i,

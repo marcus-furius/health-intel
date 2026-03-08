@@ -802,6 +802,7 @@ def compute_alerts(datasets: dict[str, pd.DataFrame], correlations: dict[str, An
     workouts_df = datasets.get("workouts", pd.DataFrame())
     body_df = datasets.get("body_composition", pd.DataFrame())
     nutrition_df = datasets.get("nutrition", pd.DataFrame())
+    spo2_df = datasets.get("spo2", pd.DataFrame())
 
     # ── Body Composition Alerts ──
 
@@ -817,6 +818,7 @@ def compute_alerts(datasets: dict[str, pd.DataFrame], correlations: dict[str, An
                 last_val = recent_muscle.iloc[-1]
                 alerts.append({
                     "severity": "high",
+                    "category": "body",
                     "title": "Muscle Mass Declining",
                     "detail": f"Muscle mass has dropped from {first_val:.1f} kg to {last_val:.1f} kg "
                               f"over recent scans ({last_val - first_val:+.1f} kg).",
@@ -830,6 +832,7 @@ def compute_alerts(datasets: dict[str, pd.DataFrame], correlations: dict[str, An
             elif slope is not None and slope > 0.05:
                 alerts.append({
                     "severity": "positive",
+                    "category": "body",
                     "title": "Muscle Mass Increasing",
                     "detail": f"Muscle mass is trending upward over recent scans — current trajectory is favourable.",
                     "intervention": "- Maintain current training and nutrition approach\n- Continue monitoring to ensure the trend sustains",
@@ -844,6 +847,7 @@ def compute_alerts(datasets: dict[str, pd.DataFrame], correlations: dict[str, An
                 last_val = recent_fat.iloc[-1]
                 alerts.append({
                     "severity": "high" if last_val > 20 else "medium",
+                    "category": "body",
                     "title": "Body Fat Increasing",
                     "detail": f"Body fat has risen from {first_val:.1f}% to {last_val:.1f}% over recent scans.",
                     "intervention": (
@@ -856,6 +860,7 @@ def compute_alerts(datasets: dict[str, pd.DataFrame], correlations: dict[str, An
             elif slope is not None and slope < -0.1:
                 alerts.append({
                     "severity": "positive",
+                    "category": "body",
                     "title": "Body Fat Decreasing",
                     "detail": f"Body fat is trending downward — current approach is working.",
                     "intervention": "- Maintain current deficit and activity levels\n- Watch for muscle loss alongside fat loss (check muscle mass trend)",
@@ -867,6 +872,7 @@ def compute_alerts(datasets: dict[str, pd.DataFrame], correlations: dict[str, An
             if pd.notna(latest_vf) and latest_vf >= 12:
                 alerts.append({
                     "severity": "high",
+                    "category": "body",
                     "title": "Elevated Visceral Fat",
                     "detail": f"Visceral fat rating is {latest_vf:.0f} (healthy range: 1–12, ideal: <9).",
                     "intervention": (
@@ -887,6 +893,7 @@ def compute_alerts(datasets: dict[str, pd.DataFrame], correlations: dict[str, An
                 if muscle_delta < -0.3 and fat_delta > 0.3:
                     alerts.append({
                         "severity": "high",
+                        "category": "body",
                         "title": "Unfavourable Recomposition",
                         "detail": f"Losing muscle ({muscle_delta:+.1f} kg) while gaining fat ({fat_delta:+.1f} kg) "
                                   f"over recent scans — this is the opposite of the desired direction.",
@@ -908,6 +915,7 @@ def compute_alerts(datasets: dict[str, pd.DataFrame], correlations: dict[str, An
         if avg_recent < 65:
             alerts.append({
                 "severity": "high",
+                "category": "sleep",
                 "title": "Poor Recent Sleep Quality",
                 "detail": f"Average sleep score over the last 28 days is {avg_recent:.0f} (below 65 threshold).",
                 "intervention": (
@@ -920,6 +928,7 @@ def compute_alerts(datasets: dict[str, pd.DataFrame], correlations: dict[str, An
         elif low_sleep_days >= 7:
             alerts.append({
                 "severity": "medium",
+                "category": "sleep",
                 "title": "Frequent Poor Sleep Nights",
                 "detail": f"{low_sleep_days} nights with sleep score below 60 in the last 28 days.",
                 "intervention": (
@@ -934,6 +943,7 @@ def compute_alerts(datasets: dict[str, pd.DataFrame], correlations: dict[str, An
         if slope is not None and slope < -0.2:
             alerts.append({
                 "severity": "medium",
+                "category": "sleep",
                 "title": "Declining Sleep Trend",
                 "detail": "Sleep scores are trending downward over the last 4 weeks.",
                 "intervention": (
@@ -957,6 +967,7 @@ def compute_alerts(datasets: dict[str, pd.DataFrame], correlations: dict[str, An
         if low_readiness_streak >= 3:
             alerts.append({
                 "severity": "high",
+                "category": "sleep",
                 "title": "Sustained Low Readiness",
                 "detail": f"{low_readiness_streak} consecutive days with readiness below 60 — possible overreaching.",
                 "intervention": (
@@ -973,6 +984,7 @@ def compute_alerts(datasets: dict[str, pd.DataFrame], correlations: dict[str, An
             if slope is not None and slope < -0.15:
                 alerts.append({
                     "severity": "medium",
+                    "category": "sleep",
                     "title": "HRV Balance Declining",
                     "detail": "HRV balance has been trending downward — this often precedes illness or overtraining.",
                     "intervention": (
@@ -993,6 +1005,7 @@ def compute_alerts(datasets: dict[str, pd.DataFrame], correlations: dict[str, An
         if recent_sessions < 2:
             alerts.append({
                 "severity": "medium",
+                "category": "training",
                 "title": "Training Frequency Drop",
                 "detail": f"Only {recent_sessions} training session(s) in the last 14 days.",
                 "intervention": (
@@ -1010,6 +1023,7 @@ def compute_alerts(datasets: dict[str, pd.DataFrame], correlations: dict[str, An
             if first_4w > 0 and last_4w < first_4w * 0.7:
                 alerts.append({
                     "severity": "medium",
+                    "category": "training",
                     "title": "Training Volume Declining",
                     "detail": f"Weekly volume dropped from ~{first_4w:,.0f} kg to ~{last_4w:,.0f} kg "
                               f"over the last 8 weeks ({(last_4w/first_4w - 1)*100:+.0f}%).",
@@ -1035,6 +1049,7 @@ def compute_alerts(datasets: dict[str, pd.DataFrame], correlations: dict[str, An
                     if ratio > 1.5:
                         alerts.append({
                             "severity": "medium",
+                            "category": "training",
                             "title": "Push/Pull Imbalance",
                             "detail": f"Push volume is {ratio:.1f}× pull volume — ideally this should be close to 1:1.",
                             "intervention": (
@@ -1046,6 +1061,7 @@ def compute_alerts(datasets: dict[str, pd.DataFrame], correlations: dict[str, An
                     elif ratio < 0.67:
                         alerts.append({
                             "severity": "medium",
+                            "category": "training",
                             "title": "Pull-Dominant Imbalance",
                             "detail": f"Pull volume is {1/ratio:.1f}× push volume.",
                             "intervention": "- Add more pressing movements to balance the ratio\n- Ensure adequate chest and shoulder training",
@@ -1061,6 +1077,7 @@ def compute_alerts(datasets: dict[str, pd.DataFrame], correlations: dict[str, An
                     if ratio > 2.0:
                         alerts.append({
                             "severity": "low",
+                            "category": "training",
                             "title": "Upper-Body Dominant Training",
                             "detail": f"Upper body volume is {ratio:.1f}× lower body volume.",
                             "intervention": "- Consider adding a dedicated leg day or extra lower-body compounds\n- Squats, deadlifts, and lunges build a strong foundation",
@@ -1072,6 +1089,7 @@ def compute_alerts(datasets: dict[str, pd.DataFrame], correlations: dict[str, An
                 if neglected:
                     alerts.append({
                         "severity": "low",
+                        "category": "training",
                         "title": "Undertrained Muscle Groups",
                         "detail": f"These groups receive less than 3% of total volume: {', '.join(neglected)}.",
                         "intervention": f"- Add targeted accessory work for {', '.join(neglected)}\n- Even 2–3 sets per week can prevent imbalances",
@@ -1088,6 +1106,7 @@ def compute_alerts(datasets: dict[str, pd.DataFrame], correlations: dict[str, An
             if avg_recent_stress > 0 and avg_recent_recovery / avg_recent_stress < 0.5:
                 alerts.append({
                     "severity": "medium",
+                    "category": "sleep",
                     "title": "Low Recovery-to-Stress Ratio",
                     "detail": (f"Over the last 14 days, avg high recovery ({avg_recent_recovery:.0f} min) "
                                f"is less than half of avg high stress ({avg_recent_stress:.0f} min)."),
@@ -1102,6 +1121,7 @@ def compute_alerts(datasets: dict[str, pd.DataFrame], correlations: dict[str, An
         if stress_trend is not None and stress_trend > 1.0:
             alerts.append({
                 "severity": "medium",
+                "category": "sleep",
                 "title": "Stress Rapidly Increasing",
                 "detail": f"High stress minutes trending sharply upward over the past 28 days (slope: +{stress_trend:.1f} min/day).",
                 "intervention": (
@@ -1121,6 +1141,7 @@ def compute_alerts(datasets: dict[str, pd.DataFrame], correlations: dict[str, An
             if avg_recent_steps < 5000:
                 alerts.append({
                     "severity": "medium",
+                    "category": "sleep",
                     "title": "Low Daily Movement",
                     "detail": f"Average steps over the last 14 days: {avg_recent_steps:,.0f} (below 5,000).",
                     "intervention": (
@@ -1138,6 +1159,7 @@ def compute_alerts(datasets: dict[str, pd.DataFrame], correlations: dict[str, An
         if corr is not None and corr < -0.3:
             alerts.append({
                 "severity": "medium",
+                "category": "correlations",
                 "title": "Heavy Training Hurting Recovery",
                 "detail": f"Strong negative correlation (r={corr:.2f}) between training volume and next-day readiness.",
                 "intervention": (
@@ -1146,6 +1168,474 @@ def compute_alerts(datasets: dict[str, pd.DataFrame], correlations: dict[str, An
                     "- Ensure post-workout nutrition (protein + carbs within 2 hours)"
                 ),
             })
+
+    # ── Combined-Metric Alerts ──
+
+    # Overtraining vs Safe Deload: high volume + declining HRV + low readiness
+    hrv_col = None
+    if not readiness_df.empty:
+        hrv_col = next((c for c in ["contributors.hrv_balance", "hrv_balance"] if c in readiness_df.columns), None)
+    if not workouts_df.empty and hrv_col and not readiness_df.empty:
+        recent_readiness = readiness_df.sort_values("day").tail(14)
+        avg_readiness_14d = recent_readiness["score"].mean() if "score" in recent_readiness.columns else None
+        hrv_slope = _recent_trend(readiness_df.sort_values("day")[hrv_col], window=14)
+
+        sorted_workouts_2 = workouts_df.sort_values("day")
+        recent_cutoff_2 = sorted_workouts_2["day"].max() - pd.Timedelta(days=14)
+        recent_vol = sorted_workouts_2[sorted_workouts_2["day"] >= recent_cutoff_2]
+        vol_per_session = recent_vol.groupby("day")["volume"].sum().mean() if not recent_vol.empty else 0
+
+        if avg_readiness_14d and avg_readiness_14d < 65 and hrv_slope is not None and hrv_slope < -0.1 and vol_per_session > 0:
+            alerts.append({
+                "severity": "high",
+                "category": "training",
+                "title": "Overtraining Risk Detected",
+                "detail": (
+                    f"Low readiness ({avg_readiness_14d:.0f} avg), declining HRV, and maintained training volume "
+                    f"({vol_per_session:,.0f} kg/session) — classic overtraining pattern."
+                ),
+                "intervention": (
+                    "- Take an immediate deload: reduce volume by 50% for 5–7 days\n"
+                    "- Prioritise sleep (8+ hours) and nutrition (maintenance calories, high protein)\n"
+                    "- Add rest days between sessions — avoid back-to-back training\n"
+                    "- Resume normal volume only when readiness returns above 70 and HRV stabilises"
+                ),
+            })
+        elif avg_readiness_14d and avg_readiness_14d >= 70 and hrv_slope is not None and hrv_slope >= 0 and vol_per_session > 0:
+            # Check if volume recently dropped (intentional deload) with good recovery markers
+            prev_cutoff = sorted_workouts_2["day"].max() - pd.Timedelta(days=28)
+            prev_vol = sorted_workouts_2[
+                (sorted_workouts_2["day"] >= prev_cutoff) & (sorted_workouts_2["day"] < recent_cutoff_2)
+            ]
+            prev_vol_avg = prev_vol.groupby("day")["volume"].sum().mean() if not prev_vol.empty else 0
+            if prev_vol_avg > 0 and vol_per_session < prev_vol_avg * 0.7:
+                alerts.append({
+                    "severity": "positive",
+                    "category": "training",
+                    "title": "Effective Deload in Progress",
+                    "detail": (
+                        f"Volume reduced ({vol_per_session:,.0f} vs {prev_vol_avg:,.0f} kg/session) while "
+                        f"readiness ({avg_readiness_14d:.0f}) and HRV are healthy — recovery is working."
+                    ),
+                    "intervention": (
+                        "- Continue the deload for the planned duration (typically 5–7 days)\n"
+                        "- Ramp volume back up gradually (80% → 100% over 1–2 weeks)"
+                    ),
+                })
+
+    # High protein + high training volume + good sleep = growth conditions
+    if not nutrition_df.empty and not workouts_df.empty and not sleep_df.empty:
+        logged_nutr = nutrition_df[nutrition_df["calories"] > 0] if "calories" in nutrition_df.columns else pd.DataFrame()
+        if not logged_nutr.empty and "protein" in logged_nutr.columns:
+            recent_protein = logged_nutr.sort_values("day").tail(14)["protein"].mean()
+            recent_sleep_avg = sleep_df.sort_values("day").tail(14)["score"].mean() if "score" in sleep_df.columns else 0
+            recent_train_days = workouts_df.sort_values("day").tail(14)["day"].nunique() if not workouts_df.empty else 0
+            latest_weight = None
+            if not body_df.empty and "weight_kg" in body_df.columns:
+                latest_weight = float(body_df.sort_values("day").iloc[-1]["weight_kg"])
+            protein_per_kg = recent_protein / latest_weight if latest_weight else 0
+
+            if protein_per_kg >= 1.6 and recent_sleep_avg >= 75 and recent_train_days >= 3:
+                alerts.append({
+                    "severity": "positive",
+                    "category": "training",
+                    "title": "Optimal Growth Conditions",
+                    "detail": (
+                        f"Protein intake ({protein_per_kg:.1f} g/kg), sleep quality ({recent_sleep_avg:.0f}), "
+                        f"and training frequency ({recent_train_days} sessions/14d) are all in the growth zone."
+                    ),
+                    "intervention": (
+                        "- Maintain current approach — this is the formula for muscle gain\n"
+                        "- Focus on progressive overload to capitalise on recovery capacity"
+                    ),
+                })
+
+    # ── Sleep Pattern Alerts ──
+
+    if not sleep_df.empty:
+        sorted_sleep = sleep_df.sort_values("day")
+
+        # Sleep latency increasing
+        if "contributors.latency" in sorted_sleep.columns:
+            latency_slope = _recent_trend(sorted_sleep["contributors.latency"], window=28)
+            if latency_slope is not None and latency_slope < -0.2:
+                alerts.append({
+                    "severity": "medium",
+                    "category": "sleep",
+                    "title": "Sleep Latency Worsening",
+                    "detail": "Sleep latency contributor score is declining — you may be taking longer to fall asleep.",
+                    "intervention": (
+                        "- Avoid stimulants (caffeine, intense exercise) within 4 hours of bedtime\n"
+                        "- Establish a wind-down routine: dim lights, no screens 30–60 min before bed\n"
+                        "- Try relaxation techniques (4-7-8 breathing, progressive muscle relaxation)\n"
+                        "- Keep a consistent bedtime — irregular schedules worsen latency"
+                    ),
+                })
+
+        # Sleep efficiency declining
+        if "contributors.efficiency" in sorted_sleep.columns:
+            eff_slope = _recent_trend(sorted_sleep["contributors.efficiency"], window=28)
+            if eff_slope is not None and eff_slope < -0.2:
+                alerts.append({
+                    "severity": "medium",
+                    "category": "sleep",
+                    "title": "Sleep Efficiency Declining",
+                    "detail": "Sleep efficiency contributor score is trending down — more time in bed is spent awake.",
+                    "intervention": (
+                        "- Only go to bed when truly sleepy — avoid lying awake in bed\n"
+                        "- Keep the bedroom exclusively for sleep (no work, no scrolling)\n"
+                        "- Maintain a cool, dark environment (18–19°C, blackout curtains)\n"
+                        "- Avoid alcohol before bed — it fragments sleep despite feeling sedating"
+                    ),
+                })
+
+        # Deep sleep % low
+        if "deep_sleep_duration" in sorted_sleep.columns and "total_sleep_duration" in sorted_sleep.columns:
+            recent = sorted_sleep.tail(14)
+            total = recent["total_sleep_duration"].sum()
+            deep = recent["deep_sleep_duration"].sum()
+            if total > 0:
+                deep_pct = deep / total * 100
+                if deep_pct < 15:
+                    alerts.append({
+                        "severity": "medium",
+                        "category": "sleep",
+                        "title": "Low Deep Sleep Percentage",
+                        "detail": f"Deep sleep is {deep_pct:.0f}% of total sleep over the last 14 nights (target: 20–25%).",
+                        "intervention": (
+                            "- Exercise regularly (but not within 3 hours of bedtime)\n"
+                            "- Avoid alcohol — it significantly reduces deep sleep\n"
+                            "- Keep a cool bedroom — cooler temperatures promote deep sleep\n"
+                            "- Consider magnesium supplementation (supports slow-wave sleep)"
+                        ),
+                    })
+
+        # Sleep regularity — check bedtime variance via timestamp
+        if "timestamp" in sorted_sleep.columns:
+            recent = sorted_sleep.tail(14)
+            timestamps = pd.to_datetime(recent["timestamp"], errors="coerce").dropna()
+            if len(timestamps) >= 7:
+                bedtimes_hour = timestamps.dt.hour + timestamps.dt.minute / 60
+                # Handle wrap-around midnight (e.g. 23:00 and 01:00 should be close)
+                bedtimes_adj = bedtimes_hour.copy()
+                bedtimes_adj[bedtimes_adj < 12] += 24  # Shift early AM times
+                spread = bedtimes_adj.max() - bedtimes_adj.min()
+                if spread > 2.0:
+                    alerts.append({
+                        "severity": "low",
+                        "category": "sleep",
+                        "title": "Irregular Sleep Schedule",
+                        "detail": f"Bedtime varies by {spread:.1f} hours over the last 14 nights (>2 hour spread).",
+                        "intervention": (
+                            "- Set a consistent bedtime and wake time — even on weekends\n"
+                            "- Irregular schedules disrupt circadian rhythm and reduce sleep quality\n"
+                            "- Use an alarm for bedtime, not just wake-up"
+                        ),
+                    })
+
+    # Breathing disturbances (from SpO2 data)
+    if not spo2_df.empty and "breathing_disturbance_index" in spo2_df.columns:
+        recent_spo2 = spo2_df.sort_values("day").tail(14)
+        bdi_vals = recent_spo2["breathing_disturbance_index"].dropna()
+        if len(bdi_vals) >= 3:
+            avg_bdi = bdi_vals.mean()
+            if avg_bdi > 10:
+                alerts.append({
+                    "severity": "high",
+                    "category": "sleep",
+                    "title": "Elevated Breathing Disturbances",
+                    "detail": f"Average breathing disturbance index is {avg_bdi:.1f} over the last 14 nights (elevated >10).",
+                    "intervention": (
+                        "- Avoid sleeping on your back — try side sleeping\n"
+                        "- Avoid alcohol and sedatives before bed\n"
+                        "- If persistent, consult a sleep specialist — this may indicate sleep apnea\n"
+                        "- Elevated BDI impairs deep sleep and next-day recovery"
+                    ),
+                })
+            elif avg_bdi > 5:
+                alerts.append({
+                    "severity": "low",
+                    "category": "sleep",
+                    "title": "Mild Breathing Disturbances",
+                    "detail": f"Average breathing disturbance index is {avg_bdi:.1f} — slightly elevated.",
+                    "intervention": (
+                        "- Monitor the trend — occasional mild disturbances can be normal\n"
+                        "- Try elevating your head slightly and avoiding back sleeping\n"
+                        "- Nasal congestion or allergies may contribute — address if applicable"
+                    ),
+                })
+
+    # ── Additional Activity Alerts ──
+
+    if not activity_df.empty:
+        sorted_activity = activity_df.sort_values("day")
+
+        # Sedentary >8 hours/day
+        if "sedentary_time" in sorted_activity.columns:
+            recent = sorted_activity.tail(14)
+            avg_sedentary_hrs = recent["sedentary_time"].mean() / 3600
+            if avg_sedentary_hrs > 8:
+                high_days = (recent["sedentary_time"] > 8 * 3600).sum()
+                alerts.append({
+                    "severity": "medium",
+                    "category": "activity",
+                    "title": "Excessive Sedentary Time",
+                    "detail": f"Average sedentary time is {avg_sedentary_hrs:.1f} hrs/day over the last 14 days "
+                              f"({high_days} days above 8 hours).",
+                    "intervention": (
+                        "- Set hourly movement reminders — stand and walk for 2–5 minutes each hour\n"
+                        "- Take walking meetings or phone calls\n"
+                        "- Consider a standing desk for part of the workday\n"
+                        "- Prolonged sedentary time increases cardiovascular risk independent of exercise"
+                    ),
+                })
+
+        # Steps declining for 2+ weeks
+        steps_col = next((c for c in ["steps", "total_steps"] if c in sorted_activity.columns), None)
+        if steps_col and len(sorted_activity) >= 28:
+            first_14 = sorted_activity.tail(28).head(14)[steps_col].mean()
+            last_14 = sorted_activity.tail(14)[steps_col].mean()
+            if first_14 > 0 and last_14 < first_14 * 0.8:
+                alerts.append({
+                    "severity": "low",
+                    "category": "activity",
+                    "title": "Steps Declining",
+                    "detail": f"Average steps dropped from {first_14:,.0f} to {last_14:,.0f} "
+                              f"over the last 2 weeks ({(last_14/first_14 - 1)*100:+.0f}%).",
+                    "intervention": (
+                        "- Identify the cause — weather, schedule change, injury?\n"
+                        "- Set a minimum daily step target to maintain baseline activity\n"
+                        "- Even a short daily walk preserves NEAT and metabolic health"
+                    ),
+                })
+
+        # Low activity intensity (mostly sedentary, not enough high/medium)
+        if ("high_activity_time" in sorted_activity.columns
+                and "medium_activity_time" in sorted_activity.columns
+                and "sedentary_time" in sorted_activity.columns):
+            recent = sorted_activity.tail(14)
+            avg_high = recent["high_activity_time"].mean()
+            avg_medium = recent["medium_activity_time"].mean()
+            avg_sedentary = recent["sedentary_time"].mean()
+            active_time = avg_high + avg_medium
+            if avg_sedentary > 0 and active_time / avg_sedentary < 0.05:
+                alerts.append({
+                    "severity": "low",
+                    "category": "activity",
+                    "title": "Low Activity Intensity",
+                    "detail": (f"High+medium activity averages {active_time/60:.0f} min/day vs "
+                               f"{avg_sedentary/3600:.1f} hrs sedentary — very little vigorous movement."),
+                    "intervention": (
+                        "- Add short bursts of higher-intensity movement throughout the day\n"
+                        "- Even 10 minutes of brisk walking or stair climbing counts as medium activity\n"
+                        "- Health guidelines recommend 150+ min/week of moderate or 75+ min/week of vigorous activity"
+                    ),
+                })
+
+    # ── Additional Training Alerts ──
+
+    if not workouts_df.empty:
+        sorted_wk = workouts_df.sort_values("day")
+
+        # Training volume plateaued — no progressive overload for 4+ weeks
+        if "volume" in sorted_wk.columns:
+            daily_vol = sorted_wk.groupby("day")["volume"].sum()
+            if len(daily_vol) >= 28:
+                weekly_vol = daily_vol.resample("W").sum()
+                if len(weekly_vol) >= 4:
+                    last_4w = weekly_vol.tail(4)
+                    vol_slope = _recent_trend(last_4w, window=len(last_4w))
+                    vol_cv = last_4w.std() / last_4w.mean() if last_4w.mean() > 0 else 0
+                    if vol_slope is not None and abs(vol_slope) < 50 and vol_cv < 0.1 and last_4w.mean() > 0:
+                        alerts.append({
+                            "severity": "low",
+                            "category": "training",
+                            "title": "Training Volume Plateaued",
+                            "detail": f"Weekly volume has been flat (~{last_4w.mean():,.0f} kg/week) for 4+ weeks "
+                                      f"with minimal variation (CV={vol_cv:.0%}).",
+                            "intervention": (
+                                "- Progressive overload is key — aim to increase volume by 5–10% per week\n"
+                                "- Add reps, weight, or sets incrementally\n"
+                                "- If intentionally maintaining, ensure it aligns with your goals\n"
+                                "- Consider periodisation: accumulation → intensification → deload"
+                            ),
+                        })
+
+        # Exercise stagnation — same exercises for 2+ months
+        if "exercise" in sorted_wk.columns:
+            cutoff_recent = sorted_wk["day"].max() - pd.Timedelta(days=28)
+            cutoff_older = cutoff_recent - pd.Timedelta(days=28)
+            recent_exercises = set(sorted_wk[sorted_wk["day"] >= cutoff_recent]["exercise"].unique())
+            older_exercises = set(
+                sorted_wk[(sorted_wk["day"] >= cutoff_older) & (sorted_wk["day"] < cutoff_recent)]["exercise"].unique()
+            )
+            if recent_exercises and older_exercises:
+                overlap = recent_exercises & older_exercises
+                if len(recent_exercises) > 0 and len(overlap) / len(recent_exercises) > 0.9 and len(recent_exercises) >= 5:
+                    alerts.append({
+                        "severity": "low",
+                        "category": "training",
+                        "title": "Exercise Selection Stagnation",
+                        "detail": (f"{len(overlap)}/{len(recent_exercises)} exercises are identical to the previous month "
+                                   f"— limited exercise variety."),
+                        "intervention": (
+                            "- Rotate accessory exercises every 4–6 weeks to provide novel stimulus\n"
+                            "- Keep compound lifts but vary grips, stances, and tempos\n"
+                            "- New movement patterns can break plateaus and reduce overuse injury risk"
+                        ),
+                    })
+
+    # ── Nutrition Alerts ──
+
+    if not nutrition_df.empty and "calories" in nutrition_df.columns:
+        logged_nutr = nutrition_df[nutrition_df["calories"] > 0].sort_values("day")
+
+        # Caloric deficit too aggressive (>500 kcal/day)
+        if not logged_nutr.empty:
+            bmr_val = None
+            if not body_df.empty and "bmr" in body_df.columns:
+                bmr_val = float(body_df.sort_values("day").iloc[-1]["bmr"])
+            active_cal_col = None
+            if not activity_df.empty:
+                active_cal_col = next((c for c in ["active_calories"] if c in activity_df.columns), None)
+            if bmr_val and active_cal_col:
+                nut = logged_nutr[["day", "calories"]].tail(14).copy()
+                act = activity_df[["day", active_cal_col]].copy()
+                merged = nut.merge(act, on="day", how="inner")
+                if not merged.empty:
+                    merged["deficit"] = merged["calories"] - (bmr_val + merged[active_cal_col])
+                    avg_deficit = merged["deficit"].mean()
+                    if avg_deficit < -500:
+                        alerts.append({
+                            "severity": "high",
+                            "category": "nutrition",
+                            "title": "Aggressive Caloric Deficit",
+                            "detail": f"Average daily deficit is {avg_deficit:,.0f} kcal over the last 14 days "
+                                      f"(>500 kcal deficit risks lean mass loss).",
+                            "intervention": (
+                                "- Reduce deficit to 300–500 kcal/day to preserve muscle mass\n"
+                                "- Ensure protein intake is at least 2.0 g/kg during a cut\n"
+                                "- Aggressive deficits increase cortisol and impair recovery\n"
+                                "- Consider diet breaks (2 weeks at maintenance) every 6–8 weeks"
+                            ),
+                        })
+
+        # Micronutrient gaps
+        micro_checks = [
+            ("calcium", "Calcium", 800, "mg", "- Add dairy, fortified foods, or leafy greens\n- Consider supplementation if consistently low"),
+            ("vitamin_c", "Vitamin C", 60, "%DV", "- Eat more citrus fruits, peppers, and berries\n- Vitamin C supports immune function and collagen synthesis"),
+            ("iron", "Iron", 80, "%DV", "- Include iron-rich foods: red meat, lentils, spinach\n- Pair with vitamin C for better absorption"),
+        ]
+        for col, name, threshold, unit, fix in micro_checks:
+            if col in logged_nutr.columns:
+                recent_vals = logged_nutr[col].tail(14).dropna()
+                if len(recent_vals) >= 7:
+                    avg_val = recent_vals.mean()
+                    low_days = (recent_vals < threshold).sum()
+                    if low_days >= 10:
+                        alerts.append({
+                            "severity": "medium",
+                            "category": "nutrition",
+                            "title": f"Low {name} Intake",
+                            "detail": f"{name} is below {threshold} {unit} on {low_days}/14 recent logged days "
+                                      f"(average: {avg_val:.0f}).",
+                            "intervention": fix,
+                        })
+
+    # ── Additional Body Composition Alerts ──
+
+    if not body_df.empty and len(body_df) >= 2:
+        sorted_body = body_df.sort_values("day")
+
+        # Segmental muscle asymmetry >5%
+        limb_pairs = [
+            ("left_arm_muscle_kg", "right_arm_muscle_kg", "Arm"),
+            ("left_leg_muscle_kg", "right_leg_muscle_kg", "Leg"),
+        ]
+        for left_col, right_col, limb_name in limb_pairs:
+            if left_col in sorted_body.columns and right_col in sorted_body.columns:
+                latest = sorted_body.iloc[-1]
+                left_val = latest[left_col]
+                right_val = latest[right_col]
+                if pd.notna(left_val) and pd.notna(right_val) and max(left_val, right_val) > 0:
+                    avg_val = (left_val + right_val) / 2
+                    diff_pct = abs(left_val - right_val) / avg_val * 100
+                    if diff_pct > 5:
+                        weaker = "left" if left_val < right_val else "right"
+                        alerts.append({
+                            "severity": "medium",
+                            "category": "body",
+                            "title": f"{limb_name} Muscle Asymmetry",
+                            "detail": f"{limb_name} muscle imbalance: L={left_val:.2f} kg, R={right_val:.2f} kg "
+                                      f"({diff_pct:.1f}% difference, {weaker} side weaker).",
+                            "intervention": (
+                                f"- Add unilateral exercises targeting the {weaker} {limb_name.lower()}\n"
+                                f"- Start sets with the weaker side and match reps on the stronger side\n"
+                                "- >5% asymmetry increases injury risk — address proactively"
+                            ),
+                        })
+
+        # BMR declining despite stable weight (possible muscle loss)
+        if "bmr" in sorted_body.columns and "weight_kg" in sorted_body.columns and len(sorted_body) >= 3:
+            recent = sorted_body.tail(4)
+            weight_change = abs(recent["weight_kg"].iloc[-1] - recent["weight_kg"].iloc[0])
+            bmr_change = recent["bmr"].iloc[-1] - recent["bmr"].iloc[0]
+            if weight_change < 1.0 and bmr_change < -30:
+                alerts.append({
+                    "severity": "medium",
+                    "category": "body",
+                    "title": "BMR Declining (Stable Weight)",
+                    "detail": f"BMR dropped by {bmr_change:+.0f} kcal while weight stayed within 1 kg — "
+                              f"possible shift from muscle to fat.",
+                    "intervention": (
+                        "- Review body composition trends — is muscle mass declining?\n"
+                        "- Increase resistance training volume and protein intake\n"
+                        "- BMR decline at stable weight suggests unfavourable body composition shift"
+                    ),
+                })
+
+        # Metabolic age increasing
+        if "metabolic_age" in sorted_body.columns and len(sorted_body) >= 3:
+            recent = sorted_body.tail(4)
+            met_age_vals = recent["metabolic_age"].dropna()
+            if len(met_age_vals) >= 2:
+                met_age_change = met_age_vals.iloc[-1] - met_age_vals.iloc[0]
+                if met_age_change > 1:
+                    alerts.append({
+                        "severity": "low",
+                        "category": "body",
+                        "title": "Metabolic Age Increasing",
+                        "detail": f"Metabolic age has increased by {met_age_change:.0f} year(s) "
+                                  f"over recent scans (now {met_age_vals.iloc[-1]:.0f}).",
+                        "intervention": (
+                            "- Increase lean muscle mass through progressive resistance training\n"
+                            "- Reduce body fat percentage — this is the primary driver of metabolic age\n"
+                            "- Metabolic age reflects body composition relative to chronological age"
+                        ),
+                    })
+
+        # Phase angle declining
+        phase_cols = [c for c in sorted_body.columns if c.startswith("phase_angle_")]
+        if phase_cols and len(sorted_body) >= 3:
+            # Average phase angle across available limbs
+            recent = sorted_body.tail(4)
+            avg_phase = recent[phase_cols].mean(axis=1)
+            if len(avg_phase.dropna()) >= 2:
+                phase_change = avg_phase.dropna().iloc[-1] - avg_phase.dropna().iloc[0]
+                if phase_change < -0.3:
+                    alerts.append({
+                        "severity": "medium",
+                        "category": "body",
+                        "title": "Phase Angle Declining",
+                        "detail": f"Average phase angle decreased by {phase_change:+.1f}° over recent scans "
+                                  f"(now {avg_phase.dropna().iloc[-1]:.1f}°).",
+                        "intervention": (
+                            "- Phase angle reflects cellular health and muscle quality\n"
+                            "- Ensure adequate protein (1.6–2.2 g/kg) and hydration\n"
+                            "- Maintain consistent resistance training\n"
+                            "- If persistently declining, review overall nutrition and recovery"
+                        ),
+                    })
 
     # Sort by severity
     severity_order = {"high": 0, "medium": 1, "low": 2, "positive": 3}

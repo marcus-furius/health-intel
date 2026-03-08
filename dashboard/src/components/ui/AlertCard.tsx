@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { ChevronDown, ChevronUp, AlertTriangle, AlertCircle, Info, CheckCircle } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { ChevronDown, ChevronUp, AlertTriangle, AlertCircle, Info, CheckCircle, ArrowRight } from 'lucide-react';
 import { severityColors } from '../../lib/colors.ts';
 import type { AlertOut } from '../../lib/api.ts';
 
@@ -10,14 +11,25 @@ const severityIcons: Record<string, typeof AlertTriangle> = {
   positive: CheckCircle,
 };
 
+const categoryRoutes: Record<string, string> = {
+  sleep: '/sleep',
+  body: '/body',
+  training: '/training',
+  nutrition: '/nutrition',
+  activity: '/',
+  correlations: '/correlations',
+};
+
 interface Props {
   alert: AlertOut;
 }
 
 export default function AlertCard({ alert }: Props) {
   const [expanded, setExpanded] = useState(false);
+  const navigate = useNavigate();
   const Icon = severityIcons[alert.severity] || Info;
   const color = severityColors[alert.severity] || '#71717A';
+  const route = alert.category ? categoryRoutes[alert.category] : undefined;
 
   return (
     <div
@@ -47,6 +59,14 @@ export default function AlertCard({ alert }: Props) {
           <div className="text-sm text-text-secondary space-y-1 whitespace-pre-line">
             {alert.intervention}
           </div>
+          {route && (
+            <button
+              onClick={(e) => { e.stopPropagation(); navigate(route); }}
+              className="flex items-center gap-1.5 mt-3 text-xs font-medium text-chart-blue hover:underline"
+            >
+              View details <ArrowRight className="w-3 h-3" />
+            </button>
+          )}
         </div>
       )}
     </div>

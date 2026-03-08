@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import Header from '../components/layout/Header.tsx';
 import AlertCard from '../components/ui/AlertCard.tsx';
 import Skeleton from '../components/ui/Skeleton.tsx';
@@ -13,13 +13,29 @@ const severityLabels: Record<string, string> = {
   positive: 'Positive',
 };
 
+const categoryLabels: Record<string, string> = {
+  sleep: 'Sleep & Recovery',
+  body: 'Body Composition',
+  training: 'Training',
+  nutrition: 'Nutrition',
+  activity: 'Activity',
+  correlations: 'Cross-Source',
+};
+
 export default function Alerts() {
   const { data: alertsRes, isLoading } = useAlerts();
   const alerts = alertsRes?.alerts || [];
-  const [filters, setFilters] = useState<Set<string>>(new Set(severities));
+  const [sevFilters, setSevFilters] = useState<Set<string>>(new Set(severities));
+  const [catFilters, setCatFilters] = useState<Set<string> | null>(null); // null = all
 
-  const toggleFilter = (sev: string) => {
-    setFilters(prev => {
+  const categories = useMemo(() => {
+    const cats = new Set<string>();
+    alerts.forEach(a => { if (a.category) cats.add(a.category); });
+    return Array.from(cats).sort();
+  }, [alerts]);
+
+  const toggleSev = (sev: string) => {
+    setSevFilters(prev => {
       const next = new Set(prev);
       if (next.has(sev)) next.delete(sev);
       else next.add(sev);
@@ -27,11 +43,28 @@ export default function Alerts() {
     });
   };
 
-  const filtered = alerts.filter(a => filters.has(a.severity));
+  const toggleCat = (cat: string) => {
+    setCatFilters(prev => {
+      if (prev === null) {
+        // First click: select only this category
+        return new Set([cat]);
+      }
+      const next = new Set(prev);
+      if (next.has(cat)) next.delete(cat);
+      else next.add(cat);
+      // If all deselected, revert to "all"
+      return next.size === 0 ? null : next;
+    });
+  };
+
+  const filtered = alerts.filter(a =>
+    sevFilters.has(a.severity) &&
+    (catFilters === null || catFilters.has(a.category || ''))
+  );
 
   // Group by severity
   const grouped = severities
-    .filter(s => filters.has(s))
+    .filter(s => sevFilters.has(s))
     .map(sev => ({
       severity: sev,
       label: severityLabels[sev],
@@ -43,16 +76,16 @@ export default function Alerts() {
     <div>
       <Header title="Alerts & Interventions" />
 
-      {/* Filter toggles */}
-      <div className="flex gap-2 mb-6">
+      {/* Severity filter toggles */}
+      <div className="flex flex-wrap gap-2 mb-3">
         {severities.map(sev => {
-          const active = filters.has(sev);
+          const active = sevFilters.has(sev);
           const color = severityColors[sev];
           const count = alerts.filter(a => a.severity === sev).length;
           return (
             <button
               key={sev}
-              onClick={() => toggleFilter(sev)}
+              onClick={() => toggleSev(sev)}
               className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors ${
                 active ? 'border-border-default' : 'border-transparent opacity-40'
               }`}
@@ -67,6 +100,35 @@ export default function Alerts() {
           );
         })}
       </div>
+
+      {/* Category filter toggles */}
+      {categories.length > 1 && (
+        <div className="flex flex-wrap gap-2 mb-6">
+          <button
+            onClick={() => setCatFilters(null)}
+            className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors ${
+              catFilters === null ? 'border-border-default bg-bg-elevated text-text-primary' : 'border-transparent text-text-muted opacity-60'
+            }`}
+          >
+            All
+          </button>
+          {categories.map(cat => {
+            const active = catFilters === null || catFilters.has(cat);
+            const count = alerts.filter(a => a.category === cat).length;
+            return (
+              <button
+                key={cat}
+                onClick={() => toggleCat(cat)}
+                className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors ${
+                  active && catFilters !== null ? 'border-border-default bg-bg-elevated text-text-primary' : !active ? 'border-transparent text-text-muted opacity-40' : 'border-transparent text-text-secondary'
+                }`}
+              >
+                {categoryLabels[cat] || cat} ({count})
+              </button>
+            );
+          })}
+        </div>
+      )}
 
       {isLoading ? (
         <div className="space-y-3">

@@ -10,15 +10,114 @@ import pandas as pd
 
 logger = logging.getLogger(__name__)
 
+# Physiologically plausible ranges: column → (min, max)
+_VALID_RANGES: dict[str, tuple[float, float]] = {
+    # Oura scores are 0-100
+    "score": (0, 100),
+    # Heart rate
+    "bpm": (25, 250),
+    "hr_mean": (25, 250),
+    "hr_min": (25, 250),
+    "hr_max": (25, 250),
+    # Activity
+    "steps": (0, 120_000),
+    "active_calories": (0, 10_000),
+    "total_calories": (0, 15_000),
+    # SpO2
+    "spo2_percentage.average": (50, 100),
+    # Stress/recovery (minutes)
+    "stress_high": (0, 1440),
+    "recovery_high": (0, 1440),
+    # Nutrition
+    "calories": (0, 15_000),
+    "protein": (0, 1000),
+    "carbohydrates": (0, 2000),
+    "fat": (0, 1000),
+    "fiber": (0, 200),
+    "sugar": (0, 1000),
+    "sodium": (0, 20_000),
+    # Body composition
+    "weight_kg": (20, 300),
+    "body_fat_pct": (2, 70),
+    "muscle_mass_kg": (10, 150),
+    "bmr": (500, 5000),
+    "bmi": (10, 80),
+    "metabolic_age": (10, 120),
+    "visceral_fat": (0, 60),
+    "phase_angle_left_arm": (0, 20),
+    "phase_angle_right_arm": (0, 20),
+    "phase_angle_left_leg": (0, 20),
+    "phase_angle_right_leg": (0, 20),
+    # Training
+    "weight_kg_training": (0, 500),  # mapped from workout weight_kg
+    "reps": (0, 200),
+}
+
+
+def _validate_ranges(df: pd.DataFrame, context: str = "") -> pd.DataFrame:
+    """Clamp outliers to NaN and log warnings for out-of-range values."""
+    if df.empty:
+        return df
+    out = df.copy()
+    for col, (lo, hi) in _VALID_RANGES.items():
+        if col not in out.columns:
+            continue
+        if not pd.api.types.is_numeric_dtype(out[col]):
+            continue
+        mask = (out[col] < lo) | (out[col] > hi)
+        n_bad = int(mask.sum())
+        if n_bad > 0:
+            logger.warning(
+                "%s: %d values in '%s' outside [%s, %s] — set to NaN",
+                context or "validate", n_bad, col, lo, hi,
+            )
+            out.loc[mask, col] = pd.NA
+    return out
+
 
 def _load_raw_json(directory: Path, pattern: str) -> list[dict[str, Any]]:
-    """Load and combine all JSON files matching a pattern in a directory."""
+    """Load and combine ALL JSON files matching a pattern, dedup by 'day'/'date'.
+
+    Files are sorted newest-first, so when duplicates exist the most recent
+    file's records take priority (kept first by drop_duplicates).
+    """
     files = sorted(directory.glob(pattern), reverse=True)
     if not files:
         return []
-    # Use the most recent file
-    with open(files[0], "r", encoding="utf-8") as fh:
-        return json.load(fh)
+    all_records: list[dict[str, Any]] = []
+    for filepath in files:
+        with open(filepath, "r", encoding="utf-8") as fh:
+            all_records.extend(json.load(fh))
+    if not all_records:
+        return []
+    # Dedup: use 'day' or 'date' as the key, prefer first occurrence (newest file)
+    key_field = "day" if "day" in all_records[0] else "date" if "date" in all_records[0] else None
+    if key_field:
+        seen: set[str] = set()
+        deduped: list[dict[str, Any]] = []
+        for rec in all_records:
+            k = str(rec.get(key_field, ""))
+            if k and k not in seen:
+                seen.add(k)
+                deduped.append(rec)
+        if len(deduped) < len(all_records):
+            logger.info(
+                "%s: deduped %d → %d records (by %s)",
+                pattern, len(all_records), len(deduped), key_field,
+            )
+        return deduped
+    return all_records
+
+
+def _dedup_by_day(df: pd.DataFrame) -> pd.DataFrame:
+    """Drop duplicate day rows, keeping the last occurrence (most recent data)."""
+    if df.empty or "day" not in df.columns:
+        return df
+    before = len(df)
+    df = df.drop_duplicates(subset="day", keep="last").reset_index(drop=True)
+    if len(df) < before:
+        logger.info("Deduped %d → %d rows by day", before, len(df))
+    return df
 
 
 def _load_all_json(directory: Path, pattern: str) -> list[dict[str, Any]]:
@@ -56,6 +155,8 @@ def transform_oura_sleep(raw_dir: Path) -> pd.DataFrame:
                 detail_agg = detail_df.groupby("day")[stage_cols].first().reset_index()
                 daily_df = daily_df.merge(detail_agg, on="day", how="left", suffixes=("", "_detail"))
 
+    daily_df = _dedup_by_day(daily_df)
+    daily_df = _validate_ranges(daily_df, "oura_sleep")
     logger.info("Oura sleep: %d rows", len(daily_df))
     return daily_df
 
@@ -69,6 +170,8 @@ def transform_oura_readiness(raw_dir: Path) -> pd.DataFrame:
     if "day" in df.columns:
         df["day"] = pd.to_datetime(df["day"])
         df = df.sort_values("day").reset_index(drop=True)
+    df = _dedup_by_day(df)
+    df = _validate_ranges(df, "oura_readiness")
     logger.info("Oura readiness: %d rows", len(df))
     return df
 
@@ -82,6 +185,8 @@ def transform_oura_activity(raw_dir: Path) -> pd.DataFrame:
     if "day" in df.columns:
         df["day"] = pd.to_datetime(df["day"])
         df = df.sort_values("day").reset_index(drop=True)
+    df = _dedup_by_day(df)
+    df = _validate_ranges(df, "oura_activity")
     logger.info("Oura activity: %d rows", len(df))
     return df
 
@@ -100,6 +205,8 @@ def transform_oura_heartrate(raw_dir: Path) -> pd.DataFrame:
             hr_mean="mean", hr_min="min", hr_max="max", hr_std="std", hr_count="count"
         ).reset_index()
         summary["day"] = pd.to_datetime(summary["day"])
+        summary = _dedup_by_day(summary)
+        summary = _validate_ranges(summary, "oura_heartrate")
         logger.info("Oura HR: %d daily summaries", len(summary))
         return summary
     return hr_df
@@ -114,6 +221,8 @@ def transform_oura_spo2(raw_dir: Path) -> pd.DataFrame:
     if "day" in df.columns:
         df["day"] = pd.to_datetime(df["day"])
         df = df.sort_values("day").reset_index(drop=True)
+    df = _dedup_by_day(df)
+    df = _validate_ranges(df, "oura_spo2")
     logger.info("Oura SpO2: %d rows", len(df))
     return df
 
@@ -134,6 +243,8 @@ def transform_oura_stress(raw_dir: Path) -> pd.DataFrame:
             # Oura API returns values in seconds — convert to minutes
             if df[col].median() > 300:
                 df[col] = (df[col] / 60).round(1)
+    df = _dedup_by_day(df)
+    df = _validate_ranges(df, "oura_stress")
     logger.info("Oura stress: %d rows", len(df))
     return df
 
@@ -188,6 +299,8 @@ def transform_hevy_workouts(raw_dir: Path) -> pd.DataFrame:
     df = pd.DataFrame(rows)
     df["day"] = pd.to_datetime(df["day"])
     df = df.sort_values("day").reset_index(drop=True)
+    # Validate training-specific ranges (reps, volume)
+    df = _validate_ranges(df, "hevy_workouts")
     logger.info("Hevy workouts: %d set-level rows", len(df))
     return df
 
@@ -231,6 +344,8 @@ def transform_boditrax(raw_dir: Path) -> pd.DataFrame:
     if "date" in df.columns:
         df["day"] = pd.to_datetime(df["date"])
         df = df.sort_values("day").reset_index(drop=True)
+    df = _dedup_by_day(df)
+    df = _validate_ranges(df, "boditrax")
     logger.info("Boditrax: %d scans", len(df))
     return df
 
@@ -259,6 +374,8 @@ def transform_mfp(raw_dir: Path) -> pd.DataFrame:
         if col in df.columns:
             df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0)
 
+    df = _dedup_by_day(df)
+    df = _validate_ranges(df, "mfp_nutrition")
     logger.info("MFP nutrition: %d days", len(df))
     return df
 
@@ -275,6 +392,8 @@ def transform_mfp_weight(raw_dir: Path) -> pd.DataFrame:
         df = df.sort_values("day").reset_index(drop=True)
     if "weight_kg" in df.columns:
         df["weight_kg"] = pd.to_numeric(df["weight_kg"], errors="coerce")
+    df = _dedup_by_day(df)
+    df = _validate_ranges(df, "mfp_weight")
     logger.info("MFP weight: %d measurements", len(df))
     return df
 

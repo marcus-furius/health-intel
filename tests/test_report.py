@@ -10,6 +10,7 @@ from src.report import (
     _recent_trend,
     _stress_section,
     _weekly_resample,
+    compute_alerts,
     generate_report,
 )
 
@@ -125,3 +126,77 @@ def test_generate_report_all_empty(tmp_path):
     assert report_path.exists()
     content = report_path.read_text()
     assert "# Unified" in content
+
+
+# --- compute_alerts ---
+
+
+class TestComputeAlerts:
+    def test_empty_datasets(self):
+        """All empty → no alerts."""
+        datasets = {k: pd.DataFrame() for k in [
+            "sleep", "readiness", "activity", "workouts", "body_composition", "nutrition", "stress", "spo2"
+        ]}
+        alerts = compute_alerts(datasets, {})
+        assert alerts == []
+
+    def test_returns_list_of_dicts(self, sample_datasets):
+        alerts = compute_alerts(sample_datasets, {})
+        assert isinstance(alerts, list)
+        for alert in alerts:
+            assert isinstance(alert, dict)
+            assert "severity" in alert
+            assert "title" in alert
+            assert "detail" in alert
+            assert "intervention" in alert
+            assert "category" in alert
+
+    def test_severity_order(self, sample_datasets):
+        """Alerts should be sorted: high → medium → low → positive."""
+        alerts = compute_alerts(sample_datasets, {})
+        if len(alerts) >= 2:
+            order = {"high": 0, "medium": 1, "low": 2, "positive": 3}
+            severities = [order.get(a["severity"], 99) for a in alerts]
+            assert severities == sorted(severities)
+
+    def test_low_sleep_generates_alert(self):
+        """Sleep scores all below 65 → high severity alert."""
+        dates = pd.date_range("2026-01-01", periods=30, freq="D")
+        sleep_df = pd.DataFrame({"day": dates, "score": [50] * 30})
+        datasets = {"sleep": sleep_df, "readiness": pd.DataFrame(), "activity": pd.DataFrame(),
+                     "workouts": pd.DataFrame(), "body_composition": pd.DataFrame(),
+                     "nutrition": pd.DataFrame(), "stress": pd.DataFrame(), "spo2": pd.DataFrame()}
+        alerts = compute_alerts(datasets, {})
+        sleep_alerts = [a for a in alerts if "Sleep" in a["title"] or "sleep" in a["title"].lower()]
+        assert len(sleep_alerts) > 0
+        assert any(a["severity"] == "high" for a in sleep_alerts)
+
+    def test_low_steps_generates_alert(self):
+        """Steps below 5000 → medium alert."""
+        dates = pd.date_range("2026-01-01", periods=30, freq="D")
+        activity_df = pd.DataFrame({"day": dates, "steps": [3000] * 30})
+        datasets = {"sleep": pd.DataFrame(), "readiness": pd.DataFrame(), "activity": activity_df,
+                     "workouts": pd.DataFrame(), "body_composition": pd.DataFrame(),
+                     "nutrition": pd.DataFrame(), "stress": pd.DataFrame(), "spo2": pd.DataFrame()}
+        alerts = compute_alerts(datasets, {})
+        movement_alerts = [a for a in alerts if "Movement" in a["title"] or "Steps" in a["title"]]
+        assert len(movement_alerts) > 0
+
+    def test_sedentary_alert(self):
+        """Sedentary > 8 hours → alert."""
+        dates = pd.date_range("2026-01-01", periods=30, freq="D")
+        activity_df = pd.DataFrame({"day": dates, "steps": [8000] * 30, "sedentary_time": [35000] * 30})
+        datasets = {"sleep": pd.DataFrame(), "readiness": pd.DataFrame(), "activity": activity_df,
+                     "workouts": pd.DataFrame(), "body_composition": pd.DataFrame(),
+                     "nutrition": pd.DataFrame(), "stress": pd.DataFrame(), "spo2": pd.DataFrame()}
+        alerts = compute_alerts(datasets, {})
+        sed_alerts = [a for a in alerts if "Sedentary" in a["title"]]
+        assert len(sed_alerts) > 0
+
+    def test_no_crash_with_partial_data(self):
+        """Only sleep data — should not crash."""
+        dates = pd.date_range("2026-01-01", periods=30, freq="D")
+        sleep_df = pd.DataFrame({"day": dates, "score": [75] * 30})
+        datasets = {"sleep": sleep_df}
+        alerts = compute_alerts(datasets, {})
+        assert isinstance(alerts, list)

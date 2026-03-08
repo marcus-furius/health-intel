@@ -14,6 +14,7 @@ const Nutrition = lazy(() => import('./pages/Nutrition.tsx'));
 const BodyComposition = lazy(() => import('./pages/BodyComposition.tsx'));
 const Correlations = lazy(() => import('./pages/Correlations.tsx'));
 const Alerts = lazy(() => import('./pages/Alerts.tsx'));
+const Digest = lazy(() => import('./pages/Digest.tsx'));
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -66,6 +67,7 @@ export default function App() {
                 <Route path="/body" element={<BodyComposition />} />
                 <Route path="/correlations" element={<Correlations />} />
                 <Route path="/alerts" element={<Alerts />} />
+                <Route path="/digest" element={<Digest />} />
               </Routes>
             </Suspense>
           </Shell>

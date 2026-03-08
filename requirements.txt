@@ -4,5 +4,6 @@ matplotlib
 python-dotenv
 pyarrow
 pytest
+httpx
 fastapi
 uvicorn[standard]

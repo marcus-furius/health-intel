@@ -35,15 +35,15 @@ function targetStatus(value: number | null, target: TargetZone | undefined): 'in
 }
 
 const statusStyles = {
-  in: 'text-chart-emerald',
-  below: 'text-chart-amber',
-  above: 'text-chart-amber',
+  in: 'text-chart-sage',
+  below: 'text-chart-terracotta',
+  above: 'text-chart-terracotta',
 } as const;
 
-export default function MetricCard({ label, value, unit, trend, sparkline, color = '#3B82F6', loading, invertTrend, target, goal }: Props) {
+export default function MetricCard({ label, value, unit, trend, sparkline, color = '#C9A96E', loading, invertTrend, target, goal }: Props) {
   if (loading) {
     return (
-      <div className="bg-bg-card border border-border-subtle rounded-xl p-6">
+      <div className="bg-bg-card border border-border-subtle rounded-2xl p-7">
         <Skeleton className="h-4 w-20 mb-3" />
         <Skeleton className="h-10 w-28 mb-3" />
         <Skeleton className="h-12 w-full" />
@@ -70,10 +70,10 @@ export default function MetricCard({ label, value, unit, trend, sparkline, color
   }
 
   return (
-    <div className="bg-bg-card border border-border-subtle rounded-xl p-6 transition-all hover:border-border-default hover:shadow-lg hover:shadow-black/5">
+    <div className="bg-bg-card border border-border-subtle rounded-2xl p-7 animate-card-enter transition-all hover:border-border-default hover:shadow-lg hover:shadow-[#0F0E0D]/10">
       <p className="text-sm text-text-muted font-medium">{label}</p>
       <div className="flex items-baseline gap-2 mt-1">
-        <span className="text-4xl font-semibold tracking-tight">
+        <span className="text-4xl font-serif tracking-tight">
           {fmtNumber(value, value != null && value % 1 !== 0 ? 1 : 0)}
         </span>
         <span className="text-sm text-text-muted">{unit}</span>
@@ -94,14 +94,14 @@ export default function MetricCard({ label, value, unit, trend, sparkline, color
         <div className="mt-2">
           <div className="flex items-center justify-between text-xs text-text-muted mb-1">
             <span>Goal: {goal.target}{unit ? ` ${unit}` : ''}</span>
-            <span className={goalHit ? 'text-chart-emerald' : ''}>{goalPct}%</span>
+            <span className={goalHit ? 'text-chart-sage' : ''}>{goalPct}%</span>
           </div>
           <div className="h-1.5 bg-bg-elevated rounded-full overflow-hidden">
             <div
               className="h-full rounded-full transition-all"
               style={{
                 width: `${goalPct}%`,
-                backgroundColor: goalHit ? '#10B981' : color,
+                backgroundColor: goalHit ? '#7BA693' : color,
               }}
             />
           </div>

@@ -148,4 +148,17 @@ def extract_all(start_date: str, end_date: str, data_dir: Path) -> dict[str, dic
     else:
         logger.info("MFP_ENABLED=false — skipping MyFitnessPal")
 
+    # --- Bloodwork ---
+    logger.info("Extracting from Bloodwork (manual JSON)...")
+    try:
+        from src.sources.bloodwork import BloodworkSource
+        bloodwork = BloodworkSource()
+        bloodwork_data = bloodwork.pull()
+        counts = bloodwork.save_raw(bloodwork_data, raw_dir / "bloodwork")
+        all_counts["bloodwork"] = {"results": counts}
+        _save_sync_meta(raw_dir, "bloodwork", end_date, {"results": counts})
+    except Exception:
+        logger.exception("Bloodwork extraction failed")
+        all_counts["bloodwork"] = {}
+
     return all_counts

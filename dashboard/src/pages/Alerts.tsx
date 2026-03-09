@@ -91,7 +91,7 @@ export default function Alerts() {
               }`}
               style={{
                 backgroundColor: active ? `${color}15` : 'transparent',
-                color: active ? color : '#71717A',
+                color: active ? color : '#6B6560',
               }}
             >
               <span className="w-2 h-2 rounded-full" style={{ backgroundColor: color }} />
@@ -145,7 +145,7 @@ export default function Alerts() {
         <div className="space-y-6">
           {grouped.map(({ severity, label, alerts: groupAlerts }) => (
             <div key={severity}>
-              <h2 className="text-sm font-medium uppercase tracking-wide mb-3" style={{ color: severityColors[severity] }}>
+              <h2 className="text-sm font-serif uppercase tracking-wide mb-3" style={{ color: severityColors[severity] }}>
                 {label} ({groupAlerts.length})
               </h2>
               <div className="space-y-3">

@@ -24,7 +24,7 @@ export default function Digest() {
           </div>
 
           {/* Summary table */}
-          <ChartCard title="Week-over-Week" className="mb-8">
+          <ChartCard title="Week-over-Week" className="mb-10">
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
@@ -47,7 +47,7 @@ export default function Digest() {
                       </td>
                       <td className={`text-right py-3 pl-4 font-medium ${
                         item.delta == null ? 'text-text-muted'
-                          : item.delta > 0 ? 'text-chart-emerald'
+                          : item.delta > 0 ? 'text-chart-sage'
                           : item.delta < 0 ? 'text-chart-rose'
                           : 'text-text-muted'
                       }`}>
@@ -61,14 +61,14 @@ export default function Digest() {
           </ChartCard>
 
           {/* Wins & Losses */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 lg:gap-6">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 lg:gap-7">
             <ChartCard title="Wins" subtitle="Improved vs last week">
               {wins.length > 0 ? (
                 <div className="space-y-3">
                   {wins.map(w => (
                     <div key={w.label} className="flex items-center justify-between">
                       <span className="text-text-primary">{w.label}</span>
-                      <span className="text-chart-emerald font-medium">
+                      <span className="text-chart-sage font-medium">
                         +{fmtNumber(w.delta!, Math.abs(w.delta!) % 1 !== 0 ? 1 : 0)} {w.unit}
                       </span>
                     </div>

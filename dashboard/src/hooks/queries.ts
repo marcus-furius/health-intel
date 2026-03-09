@@ -238,3 +238,27 @@ export function useForecasts() {
     staleTime: 5 * 60 * 1000,
   });
 }
+
+export function useBloodwork(params?: Record<string, string>) {
+  return useQuery<{ data: Record<string, unknown>[]; reference_ranges: Record<string, any> }>({
+    queryKey: ['bloodwork', params],
+    queryFn: () => apiFetch('/bloodwork', params),
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+export function useBloodworkLatest() {
+  return useQuery<{ latest: Record<string, any> | null; reference_ranges: Record<string, any> }>({
+    queryKey: ['bloodwork-latest'],
+    queryFn: () => apiFetch('/bloodwork/latest'),
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+export function useBloodworkTrends() {
+  return useQuery<{ trends: Record<string, { date: string; value: number }[]>; reference_ranges: Record<string, any> }>({
+    queryKey: ['bloodwork-trends'],
+    queryFn: () => apiFetch('/bloodwork/trends'),
+    staleTime: 5 * 60 * 1000,
+  });
+}

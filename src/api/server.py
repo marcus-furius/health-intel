@@ -32,6 +32,7 @@ def load_datasets() -> dict[str, pd.DataFrame]:
         "nutrition": "nutrition.csv",
         "body_composition": "body_composition.csv",
         "mfp_weight": "mfp_weight.csv",
+        "bloodwork": "bloodwork.csv",
     }
     for name, filename in csv_files.items():
         path = DATA_DIR / filename

@@ -81,19 +81,19 @@ export default function BodyComposition() {
     <div>
       <Header title="Body Composition" />
 
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 lg:gap-6 mb-8">
-        <MetricCard label="Weight" value={latest?.weight_kg as number} unit="kg" trend={null} sparkline={[]} color="#A1A1AA" loading={isLoading} />
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-5 lg:gap-7 mb-10 animate-stagger">
+        <MetricCard label="Weight" value={latest?.weight_kg as number} unit="kg" trend={null} sparkline={[]} color="#A69F95" loading={isLoading} />
         <MetricCard label="Body Fat" value={latest?.body_fat_pct as number} unit="%" trend={null} sparkline={[]} color={chartColors.warning} loading={isLoading} invertTrend />
         <MetricCard label="Muscle Mass" value={latest?.muscle_mass_kg as number} unit="kg" trend={null} sparkline={[]} color={chartColors.recovery} loading={isLoading} />
         <MetricCard label="Visceral Fat" value={latest?.visceral_fat as number} unit="rating" trend={null} sparkline={[]} color={chartColors.stress} loading={isLoading} invertTrend />
         <MetricCard label="Metabolic Age" value={latest?.metabolic_age as number} unit="yrs" trend={null} sparkline={[]} color={chartColors.sleep} loading={isLoading} invertTrend />
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 lg:gap-6 mb-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 lg:gap-7 mb-6">
         <ChartCard title="Weight Trajectory" subtitle="Boditrax scans + MFP daily">
           <TrendChart
             data={weightData as Record<string, unknown>[]}
-            series={[{ dataKey: 'weight_kg', color: '#A1A1AA', name: 'Weight (kg)', type: 'line' }]}
+            series={[{ dataKey: 'weight_kg', color: '#A69F95', name: 'Weight (kg)', type: 'line' }]}
           />
         </ChartCard>
         <ChartCard title="Body Fat % Trend">
@@ -104,7 +104,7 @@ export default function BodyComposition() {
         </ChartCard>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 lg:gap-6 mb-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 lg:gap-7 mb-6">
         <ChartCard title="Muscle Mass Trend">
           <TrendChart
             data={scans as Record<string, unknown>[]}
@@ -121,7 +121,7 @@ export default function BodyComposition() {
 
       {/* Phase angle & water distribution */}
       {(hasPhaseAngle || hasWater) && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 lg:gap-6 mb-6">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 lg:gap-7 mb-6">
           {hasPhaseAngle && (
             <ChartCard title="Phase Angle Trend" subtitle="Cellular health indicator">
               <TrendChart
@@ -151,7 +151,7 @@ export default function BodyComposition() {
 
       {/* Segmental breakdown */}
       {hasSegmental && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 lg:gap-6 mb-6">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 lg:gap-7 mb-6">
           <ChartCard title="Segmental Breakdown" subtitle={latest ? fmtDateLong(latest.day as string) : ''}>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
@@ -180,7 +180,7 @@ export default function BodyComposition() {
             {asymmetries.length > 0 && (
               <div className="mt-4 space-y-1">
                 {asymmetries.map(a => (
-                  <p key={a.label} className="text-xs text-chart-amber">
+                  <p key={a.label} className="text-xs text-chart-terracotta">
                     ⚠ {a.label} asymmetry: {a.pct}% difference ({a.diff} kg)
                   </p>
                 ))}
@@ -229,7 +229,7 @@ export default function BodyComposition() {
                             {latestVal != null ? `${fmtNumber(latestVal, decimals)} ${unit}` : '—'}
                           </td>
                           <td className={`text-right py-2 pl-4 font-medium ${
-                            delta == null ? 'text-text-muted' : delta > 0 ? 'text-chart-amber' : delta < 0 ? 'text-chart-emerald' : 'text-text-muted'
+                            delta == null ? 'text-text-muted' : delta > 0 ? 'text-chart-terracotta' : delta < 0 ? 'text-chart-sage' : 'text-text-muted'
                           }`}>
                             {delta != null ? `${delta > 0 ? '+' : ''}${fmtNumber(delta, decimals)}` : '—'}
                           </td>
@@ -285,7 +285,7 @@ export default function BodyComposition() {
                         {latestVal != null ? `${fmtNumber(latestVal, decimals)} ${unit}` : '—'}
                       </td>
                       <td className={`text-right py-2 pl-4 font-medium ${
-                        delta == null ? 'text-text-muted' : delta > 0 ? 'text-chart-amber' : delta < 0 ? 'text-chart-emerald' : 'text-text-muted'
+                        delta == null ? 'text-text-muted' : delta > 0 ? 'text-chart-terracotta' : delta < 0 ? 'text-chart-sage' : 'text-text-muted'
                       }`}>
                         {delta != null ? `${delta > 0 ? '+' : ''}${fmtNumber(delta, decimals)}` : '—'}
                       </td>
@@ -320,7 +320,7 @@ export default function BodyComposition() {
                       {fmtNumber(f.current, 1)} {f.unit}
                     </td>
                     <td className={`text-right py-2 px-4 font-medium ${
-                      f.rate_per_month > 0 ? 'text-chart-emerald' : f.rate_per_month < 0 ? 'text-chart-rose' : 'text-text-muted'
+                      f.rate_per_month > 0 ? 'text-chart-sage' : f.rate_per_month < 0 ? 'text-chart-rose' : 'text-text-muted'
                     }`}>
                       {f.rate_per_month > 0 ? '+' : ''}{fmtNumber(f.rate_per_month, 2)} {f.unit}
                     </td>

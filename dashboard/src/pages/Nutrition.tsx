@@ -93,15 +93,15 @@ export default function Nutrition() {
     <div>
       <Header title="Nutrition" />
 
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 lg:gap-6 mb-8">
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-5 lg:gap-7 mb-10 animate-stagger">
         <MetricCard label="Avg Calories" value={avgCalories} unit="kcal" trend={null} sparkline={[]} color={chartColors.nutrition} loading={isLoading} />
         <MetricCard label="Protein/Day" value={avgProtein} unit="g" trend={null} sparkline={[]} color={chartColors.nutrition} loading={isLoading} />
         <MetricCard label="Protein/kg" value={proteinPerKg} unit="g/kg" trend={null} sparkline={[]} color={proteinPerKg && proteinPerKg >= 1.6 ? chartColors.recovery : chartColors.warning} loading={isLoading} target={{ min: 1.6, max: 2.2 }} />
         <MetricCard label="Compliance" value={compliance} unit="%" trend={null} sparkline={[]} color={compliance && compliance >= 80 ? chartColors.recovery : chartColors.warning} loading={isLoading} target={{ min: 80 }} />
-        <MetricCard label="Weight" value={latestWeight} unit="kg" trend={null} sparkline={[]} color="#A1A1AA" loading={isLoading} />
+        <MetricCard label="Weight" value={latestWeight} unit="kg" trend={null} sparkline={[]} color="#A69F95" loading={isLoading} />
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 lg:gap-6 mb-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 lg:gap-7 mb-6">
         <ChartCard title="Calorie Trend" loading={isLoading}>
           <TrendChart
             data={data as Record<string, unknown>[]}
@@ -121,7 +121,7 @@ export default function Nutrition() {
         </ChartCard>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 lg:gap-6 mb-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 lg:gap-7 mb-6">
         <ChartCard title="Protein per kg Bodyweight" subtitle="Target: 1.6–2.2 g/kg">
           {proteinTrend.length > 0 ? (
             <TrendChart
@@ -151,13 +151,13 @@ export default function Nutrition() {
       </div>
 
       {caloriesWeightOverlay.some(r => r.weight_kg != null) && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 lg:gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 lg:gap-7">
           <ChartCard title="Calories vs Weight" subtitle="Weekly overlay">
             <TrendChart
               data={caloriesWeightOverlay}
               series={[
                 { dataKey: 'avg_calories', color: chartColors.nutrition, name: 'Avg Calories (kcal)' },
-                { dataKey: 'weight_kg', color: '#A1A1AA', name: 'Weight (kg)', type: 'line' },
+                { dataKey: 'weight_kg', color: '#A69F95', name: 'Weight (kg)', type: 'line' },
               ]}
             />
           </ChartCard>

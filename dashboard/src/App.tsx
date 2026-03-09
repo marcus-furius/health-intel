@@ -12,6 +12,7 @@ const SleepRecovery = lazy(() => import('./pages/SleepRecovery.tsx'));
 const Training = lazy(() => import('./pages/Training.tsx'));
 const Nutrition = lazy(() => import('./pages/Nutrition.tsx'));
 const BodyComposition = lazy(() => import('./pages/BodyComposition.tsx'));
+const BloodWork = lazy(() => import('./pages/BloodWork.tsx'));
 const Correlations = lazy(() => import('./pages/Correlations.tsx'));
 const Alerts = lazy(() => import('./pages/Alerts.tsx'));
 const Digest = lazy(() => import('./pages/Digest.tsx'));
@@ -30,13 +31,13 @@ function PageFallback() {
     <div className="space-y-6">
       <Skeleton className="h-8 w-48" />
       <div className="grid grid-cols-3 gap-6">
-        <Skeleton className="h-32 w-full rounded-xl" />
-        <Skeleton className="h-32 w-full rounded-xl" />
-        <Skeleton className="h-32 w-full rounded-xl" />
+        <Skeleton className="h-32 w-full rounded-2xl" />
+        <Skeleton className="h-32 w-full rounded-2xl" />
+        <Skeleton className="h-32 w-full rounded-2xl" />
       </div>
       <div className="grid grid-cols-2 gap-6">
-        <Skeleton className="h-64 w-full rounded-xl" />
-        <Skeleton className="h-64 w-full rounded-xl" />
+        <Skeleton className="h-64 w-full rounded-2xl" />
+        <Skeleton className="h-64 w-full rounded-2xl" />
       </div>
     </div>
   );
@@ -59,16 +60,19 @@ export default function App() {
         <BrowserRouter>
           <Shell theme={theme} onToggleTheme={toggle}>
             <Suspense fallback={<PageFallback />}>
+              <div className="animate-page-enter">
               <Routes>
                 <Route path="/" element={<Overview />} />
                 <Route path="/sleep" element={<SleepRecovery />} />
                 <Route path="/training" element={<Training />} />
                 <Route path="/nutrition" element={<Nutrition />} />
                 <Route path="/body" element={<BodyComposition />} />
+                <Route path="/bloodwork" element={<BloodWork />} />
                 <Route path="/correlations" element={<Correlations />} />
                 <Route path="/alerts" element={<Alerts />} />
                 <Route path="/digest" element={<Digest />} />
               </Routes>
+              </div>
             </Suspense>
           </Shell>
         </BrowserRouter>

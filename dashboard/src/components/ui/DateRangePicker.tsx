@@ -35,13 +35,13 @@ export default function DateRangePicker({ value, onChange }: Props) {
     <div className="relative" ref={ref}>
       <button
         onClick={() => setOpen(!open)}
-        className="flex items-center gap-2 px-3 py-2 text-sm bg-bg-elevated border border-border-subtle rounded-lg text-text-secondary hover:text-text-primary hover:border-border-default transition-colors"
+        className="flex items-center gap-2 px-3 py-2 text-sm bg-bg-elevated border border-border-subtle rounded-xl text-text-secondary hover:text-text-primary hover:border-border-default transition-colors"
       >
         <Calendar className="w-4 h-4" />
         {label}
       </button>
       {open && (
-        <div className="absolute right-0 top-full mt-2 bg-bg-card border border-border-default rounded-xl shadow-xl shadow-black/20 p-3 z-30 min-w-[160px]">
+        <div className="absolute right-0 top-full mt-2 bg-bg-card border border-border-default rounded-2xl shadow-xl shadow-black/20 p-3 z-30 min-w-[160px]">
           {presets.map(({ label, days }) => (
             <button
               key={label}

@@ -51,6 +51,15 @@ _VALID_RANGES: dict[str, tuple[float, float]] = {
     # Training
     "weight_kg_training": (0, 500),  # mapped from workout weight_kg
     "reps": (0, 200),
+    # Bloodwork
+    "testosterone_nmol": (0, 100),
+    "free_testosterone_nmol": (0, 2),
+    "oestradiol_pmol": (0, 1000),
+    "haematocrit_pct": (20, 70),
+    "haemoglobin_g": (50, 250),
+    "psa_ug": (0, 50),
+    "alt_u": (0, 1000),
+    "egfr_ml": (0, 300),
 }
 
 
@@ -398,6 +407,32 @@ def transform_mfp_weight(raw_dir: Path) -> pd.DataFrame:
     return df
 
 
+def transform_bloodwork(raw_dir: Path) -> pd.DataFrame:
+    """Transform blood work data from JSON."""
+    data = _load_raw_json(raw_dir / "bloodwork", "results_*.json")
+    if not data:
+        # Fallback to manual raw file if results dir is empty
+        manual_file = raw_dir / "manual" / "bloodwork.json"
+        if manual_file.exists():
+            with open(manual_file, "r", encoding="utf-8") as fh:
+                data = json.load(fh)
+    
+    if not data:
+        return pd.DataFrame()
+
+    df = pd.json_normalize(data)
+    # Clean column names (remove markers. prefix)
+    df.columns = [c.replace("markers.", "") for c in df.columns]
+
+    if "date" in df.columns:
+        df["day"] = pd.to_datetime(df["date"])
+        df = df.sort_values("day").reset_index(drop=True)
+    
+    df = _validate_ranges(df, "bloodwork")
+    logger.info("Bloodwork: %d tests", len(df))
+    return df
+
+
 # --- Orchestrator ---
 
 def transform_all(data_dir: Path) -> dict[str, pd.DataFrame]:
@@ -453,6 +488,13 @@ def transform_all(data_dir: Path) -> dict[str, pd.DataFrame]:
         mfp_weight_df.to_csv(processed_dir / "mfp_weight.csv", index=False)
         datasets["mfp_weight"] = mfp_weight_df
         record_counts["mfp_weight"] = len(mfp_weight_df)
+
+    # Bloodwork
+    bloodwork_df = transform_bloodwork(raw_dir)
+    if not bloodwork_df.empty:
+        bloodwork_df.to_csv(processed_dir / "bloodwork.csv", index=False)
+        datasets["bloodwork"] = bloodwork_df
+        record_counts["bloodwork"] = len(bloodwork_df)
 
     # Save metadata
     meta = {"transformed_at": datetime.now().isoformat(), "record_counts": record_counts}

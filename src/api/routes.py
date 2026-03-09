@@ -1213,6 +1213,88 @@ def forecasts():
     return {"forecasts": results}
 
 
+# Reference ranges for blood work markers
+REFERENCE_RANGES = {
+    "testosterone_nmol": {"low": 15, "optimal_min": 18, "optimal_max": 25.7},
+    "free_testosterone_nmol": {"low": 0.35, "optimal_min": 0.5, "optimal_max": 0.8},
+    "oestradiol_pmol": {"low": 41, "optimal_max": 159, "high": 220},
+    "haematocrit_pct": {"low": 38, "high": 50, "critical": 54},
+    "psa_ug": {"normal_max": 1.4, "high": 4.0},
+    "hdl_mmol": {"low": 1.0, "optimal_min": 1.0, "optimal_max": 2.5},
+    "ldl_mmol": {"normal_max": 3.0},
+    "alt_u": {"normal_max": 50},
+    "egfr_ml": {"low": 60},
+    "tsh_miu": {"low": 0.27, "high": 4.2},
+    "hba1c_mmol": {"low": 20, "high": 42},
+}
+
+
+@router.get("/bloodwork")
+def bloodwork_data(start: date | None = Query(None), end: date | None = Query(None)):
+    ds = _get_datasets()
+    df = _filter_dates(ds.get("bloodwork", pd.DataFrame()), start, end)
+    if df.empty:
+        return {"data": [], "reference_ranges": REFERENCE_RANGES}
+    return {
+        "data": _df_to_records(df.sort_values("day")),
+        "reference_ranges": REFERENCE_RANGES,
+    }
+
+
+@router.get("/bloodwork/latest")
+def bloodwork_latest():
+    ds = _get_datasets()
+    df = ds.get("bloodwork", pd.DataFrame())
+    if df.empty:
+        return {"latest": None, "reference_ranges": REFERENCE_RANGES}
+    
+    latest = df.sort_values("day").iloc[-1].to_dict()
+    # Convert Timestamp to string
+    if isinstance(latest.get("day"), pd.Timestamp):
+        latest["day"] = latest["day"].strftime("%Y-%m-%d")
+    
+    # Replace NaN with None
+    import math
+    for k, v in latest.items():
+        if isinstance(v, float) and math.isnan(v):
+            latest[k] = None
+            
+    return {
+        "latest": latest,
+        "reference_ranges": REFERENCE_RANGES,
+    }
+
+
+@router.get("/bloodwork/trends")
+def bloodwork_trends():
+    ds = _get_datasets()
+    df = ds.get("bloodwork", pd.DataFrame())
+    if df.empty:
+        return {"trends": {}, "reference_ranges": REFERENCE_RANGES}
+    
+    df = df.sort_values("day")
+    trends = {}
+    
+    # Extract time series for each marker
+    markers = [c for c in df.columns if c not in ["day", "date"]]
+    for marker in markers:
+        points = []
+        for _, row in df.iterrows():
+            val = row[marker]
+            if pd.notna(val):
+                points.append({
+                    "date": row["day"].strftime("%Y-%m-%d"),
+                    "value": float(val)
+                })
+        if points:
+            trends[marker] = points
+            
+    return {
+        "trends": trends,
+        "reference_ranges": REFERENCE_RANGES,
+    }
+
+
 @router.post("/reload")
 def reload_data():
     from src.api.server import load_datasets

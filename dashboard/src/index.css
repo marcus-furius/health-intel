@@ -1,28 +1,32 @@
+@import url('https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Outfit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
 @import "tailwindcss";
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
 
 @theme {
-  --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
-  --color-bg-base: #0A0A0B;
-  --color-bg-card: #141416;
-  --color-bg-elevated: #1C1C1F;
-  --color-text-primary: #F4F4F5;
-  --color-text-secondary: #A1A1AA;
-  --color-text-muted: #71717A;
-  --color-border-subtle: #27272A;
-  --color-border-default: #3F3F46;
-  --color-chart-blue: #3B82F6;
-  --color-chart-emerald: #10B981;
-  --color-chart-amber: #F59E0B;
-  --color-chart-rose: #F43F5E;
-  --color-chart-violet: #8B5CF6;
-  --color-chart-orange: #F97316;
-  --color-chart-cyan: #06B6D4;
+  --font-sans: 'Outfit', system-ui, -apple-system, sans-serif;
+  --font-serif: 'DM Serif Display', Georgia, serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+  --color-bg-base: #0F0E0D;
+  --color-bg-card: #1A1917;
+  --color-bg-elevated: #242220;
+  --color-text-primary: #F5F0EB;
+  --color-text-secondary: #A69F95;
+  --color-text-muted: #6B6560;
+  --color-border-subtle: #2A2725;
+  --color-border-default: #3D3935;
+  --color-accent-gold: #C9A96E;
+  --color-accent-gold-hover: #D4B87D;
+  --color-chart-gold: #C9A96E;
+  --color-chart-sage: #7BA693;
+  --color-chart-terracotta: #C17858;
+  --color-chart-rose: #B85C5C;
+  --color-chart-violet: #8B7BB5;
+  --color-chart-steel: #5C8BB8;
+  --color-chart-teal: #4BA3A3;
 }
 
 *, *::before, *::after {
-  transition-property: background-color, border-color, color;
-  transition-duration: 150ms;
+  transition-property: background-color, border-color, color, box-shadow, opacity, transform;
+  transition-duration: 200ms;
   transition-timing-function: ease-out;
 }
 
@@ -36,34 +40,82 @@ body {
 }
 
 .light {
-  --color-bg-base: #FAFAFA;
+  --color-bg-base: #F7F3EF;
   --color-bg-card: #FFFFFF;
-  --color-bg-elevated: #F4F4F5;
-  --color-text-primary: #18181B;
-  --color-text-secondary: #52525B;
-  --color-text-muted: #A1A1AA;
-  --color-border-subtle: #E4E4E7;
-  --color-border-default: #D4D4D8;
+  --color-bg-elevated: #F0EBE5;
+  --color-text-primary: #1A1715;
+  --color-text-secondary: #5C5550;
+  --color-text-muted: #9C9590;
+  --color-border-subtle: #E5DFD8;
+  --color-border-default: #D1C9C0;
+}
+
+/* Entrance animations */
+@keyframes card-enter {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes page-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.animate-card-enter {
+  animation: card-enter 0.4s ease-out both;
+}
+
+.animate-page-enter {
+  animation: page-fade 0.3s ease-out both;
+}
+
+.animate-stagger > * {
+  animation: card-enter 0.4s ease-out both;
+}
+.animate-stagger > *:nth-child(1) { animation-delay: 0ms; }
+.animate-stagger > *:nth-child(2) { animation-delay: 60ms; }
+.animate-stagger > *:nth-child(3) { animation-delay: 120ms; }
+.animate-stagger > *:nth-child(4) { animation-delay: 180ms; }
+.animate-stagger > *:nth-child(5) { animation-delay: 240ms; }
+.animate-stagger > *:nth-child(6) { animation-delay: 300ms; }
+.animate-stagger > *:nth-child(7) { animation-delay: 360ms; }
+
+@keyframes warm-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+.animate-warm-pulse {
+  animation: warm-pulse 2.5s ease-in-out infinite;
 }
 
 /* Recharts tooltip override */
 .recharts-default-tooltip {
   background: var(--color-bg-elevated) !important;
   border: 1px solid var(--color-border-default) !important;
-  border-radius: 0.5rem !important;
+  border-radius: 0.75rem !important;
   box-shadow: 0 4px 12px rgb(0 0 0 / 0.3) !important;
 }
 .recharts-tooltip-label {
   color: var(--color-text-primary) !important;
-  font-weight: 500 !important;
+  font-family: 'DM Serif Display', Georgia, serif !important;
+  font-weight: 400 !important;
 }
 .recharts-tooltip-item {
   color: var(--color-text-secondary) !important;
+  font-family: 'Outfit', sans-serif !important;
 }
 
 ::-webkit-scrollbar { width: 6px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: var(--color-border-default); border-radius: 3px; }
+::-webkit-scrollbar-thumb { background: #3D3935; border-radius: 3px; }
+.light ::-webkit-scrollbar-thumb { background: #D1C9C0; }
 
 /* Print-only header — hidden on screen */
 .print-header {
@@ -82,18 +134,18 @@ body {
     display: flex !important;
     justify-content: space-between;
     align-items: baseline;
-    border-bottom: 2px solid #18181b;
+    border-bottom: 2px solid #C9A96E;
     padding-bottom: 6px;
     margin-bottom: 16px;
   }
-  .print-header h1 { font-size: 20px; font-weight: 700; color: #18181b; margin: 0; }
-  .print-header span { font-size: 12px; color: #71717a; }
+  .print-header h1 { font-size: 20px; font-family: 'DM Serif Display', Georgia, serif; font-weight: 400; color: #1A1715; margin: 0; }
+  .print-header span { font-size: 12px; color: #9C9590; }
 
   * { transition: none !important; animation: none !important; }
 
   body {
     background: white !important;
-    color: #18181b !important;
+    color: #1A1715 !important;
     font-size: 11px !important;
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
@@ -108,9 +160,9 @@ body {
   /* Cards */
   .bg-bg-card {
     background: white !important;
-    border: 1px solid #d4d4d8 !important;
+    border: 1px solid #D1C9C0 !important;
     box-shadow: none !important;
-    border-radius: 8px !important;
+    border-radius: 12px !important;
     break-inside: avoid;
     page-break-inside: avoid;
   }
@@ -122,9 +174,9 @@ body {
   }
 
   /* Text colors */
-  .text-text-primary { color: #18181b !important; }
-  .text-text-secondary { color: #3f3f46 !important; }
-  .text-text-muted { color: #71717a !important; }
+  .text-text-primary { color: #1A1715 !important; }
+  .text-text-secondary { color: #5C5550 !important; }
+  .text-text-muted { color: #9C9590 !important; }
 
   /* Chart colors — ensure they print */
   .recharts-surface { print-color-adjust: exact !important; -webkit-print-color-adjust: exact !important; }
@@ -134,7 +186,7 @@ body {
   .grid { gap: 12px !important; }
 
   /* Hover effects off */
-  .hover\:border-border-default { border-color: #d4d4d8 !important; }
+  .hover\:border-border-default { border-color: #D1C9C0 !important; }
   .hover\:shadow-lg { box-shadow: none !important; }
 
   /* Scrollbar hidden */

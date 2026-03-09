@@ -138,6 +138,44 @@ def _add_correlation(
     }
 
 
+def _bloodwork_context(results: dict[str, Any], bloodwork_df: pd.DataFrame, datasets: dict[str, pd.DataFrame]) -> None:
+    """For each blood test date, compute surrounding health metric averages."""
+    if bloodwork_df.empty:
+        return
+
+    # Metrics to window-average around test dates (14-day window)
+    window_configs = [
+        ("sleep", "score", "Sleep Score"),
+        ("readiness", "score", "Readiness Score"),
+        ("activity", "steps", "Steps"),
+    ]
+
+    context_rows = []
+    for _, row in bloodwork_df.iterrows():
+        test_date = row["day"]
+        window_start = test_date - pd.Timedelta(days=14)
+        
+        entry = {"day": test_date, "testosterone_nmol": row.get("testosterone_nmol")}
+        
+        for ds_key, col, label in window_configs:
+            df = datasets.get(ds_key, pd.DataFrame())
+            if not df.empty and "day" in df.columns and col in df.columns:
+                mask = (df["day"] >= window_start) & (df["day"] <= test_date)
+                window_vals = df.loc[mask, col].dropna()
+                if not window_vals.empty:
+                    entry[f"{label} (14d avg)"] = round(float(window_vals.mean()), 1)
+        
+        context_rows.append(entry)
+    
+    if context_rows:
+        results["bloodwork_context"] = {
+            "data": pd.DataFrame(context_rows),
+            "x_label": "Test Date",
+            "y_label": "Metrics",
+            "title": "Blood Work & Lifestyle Context",
+        }
+
+
 def compute_correlations(datasets: dict[str, pd.DataFrame]) -> dict[str, Any]:
     """Compute all cross-source correlations with multi-lag testing and bootstrap CI.
 
@@ -153,11 +191,16 @@ def compute_correlations(datasets: dict[str, pd.DataFrame]) -> dict[str, Any]:
     stress_df = datasets.get("stress", pd.DataFrame())
     heartrate_df = datasets.get("heartrate", pd.DataFrame())
     body_comp_df = datasets.get("body_composition", pd.DataFrame())
+    bloodwork_df = datasets.get("bloodwork", pd.DataFrame())
 
     # Daily training volume helper
     daily_vol = pd.DataFrame()
     if not workouts_df.empty and "volume" in workouts_df.columns:
         daily_vol = workouts_df.groupby("day")["volume"].sum().reset_index()
+
+    # --- Blood Work Context ---
+    if not bloodwork_df.empty:
+        _bloodwork_context(results, bloodwork_df, datasets)
 
     # --- Recovery & Performance ---
 

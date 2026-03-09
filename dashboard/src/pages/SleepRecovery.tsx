@@ -90,19 +90,21 @@ export default function SleepRecovery() {
     <div>
       <Header title="Sleep & Recovery" />
 
-      {/* KPIs — expanded to 7 */}
-      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4 lg:gap-6 mb-8">
+      {/* KPIs — two rows: 4 + 3 */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-5 lg:gap-7 mb-5 animate-stagger">
         <MetricCard label="Sleep Score" value={avgSleep} unit="avg" trend={null} sparkline={[]} color={chartColors.sleep} loading={sleepLoading} />
         <MetricCard label="Readiness" value={avgReadiness} unit="avg" trend={null} sparkline={[]} color={chartColors.recovery} loading={readinessLoading} />
         <MetricCard label="HRV Balance" value={avgHrv} unit="avg" trend={null} sparkline={[]} color={chartColors.recovery} loading={readinessLoading} />
-        <MetricCard label="Deep Sleep" value={avgDeepPct} unit="%" trend={null} sparkline={[]} color="#6366F1" loading={sleepLoading} target={{ min: 20, max: 25 }} />
+        <MetricCard label="Deep Sleep" value={avgDeepPct} unit="%" trend={null} sparkline={[]} color="#8B7BB5" loading={sleepLoading} target={{ min: 20, max: 25 }} />
+      </div>
+      <div className="grid grid-cols-2 lg:grid-cols-3 gap-5 lg:gap-7 mb-10 animate-stagger">
         <MetricCard label="REM Sleep" value={avgRemPct} unit="%" trend={null} sparkline={[]} color={chartColors.sleep} loading={sleepLoading} target={{ min: 18, max: 25 }} />
         <MetricCard label="Resting HR" value={avgRhr} unit="bpm" trend={null} sparkline={[]} color={chartColors.stress} loading={hrLoading} invertTrend />
         <MetricCard label="SpO2" value={avgSpo2} unit="%" trend={null} sparkline={[]} color={chartColors.spo2} loading={spo2Loading} />
       </div>
 
       {/* Score trends */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 lg:gap-6 mb-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 lg:gap-7 mb-6">
         <ChartCard title="Sleep Score Trend" loading={sleepLoading}>
           <TrendChart
             data={sleepData as Record<string, unknown>[]}
@@ -120,7 +122,7 @@ export default function SleepRecovery() {
       </div>
 
       {/* Contributor breakdowns */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 lg:gap-6 mb-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 lg:gap-7 mb-6">
         <ChartCard title="Sleep Score Drivers" subtitle="Average contributor scores">
           {sleepContribs.length > 0 ? (
             <BarChart
@@ -152,7 +154,7 @@ export default function SleepRecovery() {
       </div>
 
       {/* HRV & RHR */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 lg:gap-6 mb-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 lg:gap-7 mb-6">
         <ChartCard title="HRV Balance" loading={readinessLoading}>
           <TrendChart
             data={readinessData as Record<string, unknown>[]}
@@ -170,15 +172,15 @@ export default function SleepRecovery() {
       </div>
 
       {/* Sleep stages & latency */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 lg:gap-6 mb-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 lg:gap-7 mb-6">
         <ChartCard title="Sleep Stages" subtitle="Minutes per night">
           {stageData.length > 0 ? (
             <StackedBar
               data={stageData}
               series={[
-                { dataKey: 'deep', color: '#6366F1', name: 'Deep' },
+                { dataKey: 'deep', color: '#8B7BB5', name: 'Deep' },
                 { dataKey: 'rem', color: chartColors.sleep, name: 'REM' },
-                { dataKey: 'light', color: '#94A3B8', name: 'Light' },
+                { dataKey: 'light', color: '#A69F95', name: 'Light' },
                 { dataKey: 'awake', color: chartColors.stress, name: 'Awake' },
               ]}
             />
@@ -200,7 +202,7 @@ export default function SleepRecovery() {
       </div>
 
       {/* SpO2 & Stress */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 lg:gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 lg:gap-7">
         <ChartCard title="SpO2 Trend" subtitle="95% threshold" loading={spo2Loading}>
           <TrendChart
             data={spo2Data as Record<string, unknown>[]}

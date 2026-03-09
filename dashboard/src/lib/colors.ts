@@ -1,26 +1,29 @@
 export const colors = {
-  blue: '#3B82F6',
-  emerald: '#10B981',
-  amber: '#F59E0B',
-  rose: '#F43F5E',
-  violet: '#8B5CF6',
-  orange: '#F97316',
-  cyan: '#06B6D4',
+  gold: '#C9A96E',
+  sage: '#7BA693',
+  terracotta: '#C17858',
+  rose: '#B85C5C',
+  violet: '#8B7BB5',
+  steel: '#5C8BB8',
+  teal: '#4BA3A3',
 } as const;
 
+export const accent = '#C9A96E';
+export const accentHover = '#D4B87D';
+
 export const chartColors = {
-  sleep: colors.blue,
-  recovery: colors.emerald,
-  warning: colors.amber,
+  sleep: colors.gold,
+  recovery: colors.sage,
+  warning: colors.terracotta,
   stress: colors.rose,
   training: colors.violet,
-  nutrition: colors.orange,
-  spo2: colors.cyan,
+  nutrition: colors.teal,
+  spo2: colors.steel,
 } as const;
 
 export const severityColors: Record<string, string> = {
   high: colors.rose,
-  medium: colors.amber,
-  low: colors.blue,
-  positive: colors.emerald,
+  medium: colors.terracotta,
+  low: colors.steel,
+  positive: colors.sage,
 };

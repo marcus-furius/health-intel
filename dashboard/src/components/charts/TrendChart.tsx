@@ -81,7 +81,7 @@ export default function TrendChart({
         onClick={() => setShowRolling(v => !v)}
         className={`text-xs px-2 py-0.5 rounded transition-colors ${
           showRolling
-            ? 'bg-bg-elevated text-text-primary'
+            ? 'bg-accent-gold/10 text-accent-gold'
             : 'text-text-muted hover:text-text-secondary'
         }`}
       >
@@ -96,9 +96,9 @@ export default function TrendChart({
         {toggle}
         <ResponsiveContainer width="100%" height={height}>
           <LineChart data={chartData} margin={{ top: 4, right: 4, bottom: 0, left: -20 }}>
-            <XAxis dataKey={xKey} tickFormatter={fmtDate} tick={{ fontSize: 11, fill: '#71717A' }} axisLine={false} tickLine={false} />
-            <YAxis tick={{ fontSize: 11, fill: '#71717A' }} axisLine={false} tickLine={false} domain={domain} />
-            <Tooltip contentStyle={{ fontSize: 13 }} labelFormatter={fmtDate} />
+            <XAxis dataKey={xKey} tickFormatter={fmtDate} tick={{ fontSize: 11, fill: '#6B6560' }} axisLine={false} tickLine={false} />
+            <YAxis tick={{ fontSize: 11, fill: '#6B6560' }} axisLine={false} tickLine={false} domain={domain} />
+            <Tooltip contentStyle={{ fontSize: 13, fontFamily: 'Outfit, sans-serif' }} labelFormatter={fmtDate} />
             {allSeries.map(s => (
               <Line
                 key={s.dataKey}
@@ -126,14 +126,14 @@ export default function TrendChart({
           <defs>
             {allSeries.map(s => (
               <linearGradient key={s.dataKey} id={`grad-${s.dataKey}`} x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor={s.color} stopOpacity={0.25} />
+                <stop offset="0%" stopColor={s.color} stopOpacity={0.4} />
                 <stop offset="100%" stopColor={s.color} stopOpacity={0} />
               </linearGradient>
             ))}
           </defs>
-          <XAxis dataKey={xKey} tickFormatter={fmtDate} tick={{ fontSize: 11, fill: '#71717A' }} axisLine={false} tickLine={false} />
-          <YAxis tick={{ fontSize: 11, fill: '#71717A' }} axisLine={false} tickLine={false} domain={domain} />
-          <Tooltip contentStyle={{ fontSize: 13 }} labelFormatter={fmtDate} />
+          <XAxis dataKey={xKey} tickFormatter={fmtDate} tick={{ fontSize: 11, fill: '#6B6560' }} axisLine={false} tickLine={false} />
+          <YAxis tick={{ fontSize: 11, fill: '#6B6560' }} axisLine={false} tickLine={false} domain={domain} />
+          <Tooltip contentStyle={{ fontSize: 13, fontFamily: 'Outfit, sans-serif' }} labelFormatter={fmtDate} />
           {allSeries.map(s =>
             s.type === 'line' || isRollingLine(s) ? (
               <Line
@@ -153,7 +153,7 @@ export default function TrendChart({
                 dataKey={s.dataKey}
                 name={s.name}
                 stroke={s.color}
-                strokeWidth={2}
+                strokeWidth={2.5}
                 strokeOpacity={showRolling && showRollingToggle ? 0.4 : 1}
                 fill={`url(#grad-${s.dataKey})`}
                 fillOpacity={showRolling && showRollingToggle ? 0.3 : 1}

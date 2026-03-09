@@ -28,12 +28,12 @@ export default function AlertCard({ alert }: Props) {
   const [expanded, setExpanded] = useState(false);
   const navigate = useNavigate();
   const Icon = severityIcons[alert.severity] || Info;
-  const color = severityColors[alert.severity] || '#71717A';
+  const color = severityColors[alert.severity] || '#6B6560';
   const route = alert.category ? categoryRoutes[alert.category] : undefined;
 
   return (
     <div
-      className="bg-bg-card border border-border-subtle rounded-xl p-5 transition-all hover:border-border-default"
+      className="bg-bg-card border border-border-subtle rounded-2xl p-6 transition-all hover:border-border-default"
       style={{ borderLeftWidth: 3, borderLeftColor: color }}
     >
       <button
@@ -43,7 +43,7 @@ export default function AlertCard({ alert }: Props) {
         <div className="flex items-start gap-3 min-w-0">
           <Icon className="w-5 h-5 mt-0.5 shrink-0" style={{ color }} />
           <div className="min-w-0">
-            <h4 className="font-medium text-text-primary">{alert.title}</h4>
+            <h4 className="font-serif text-text-primary">{alert.title}</h4>
             <p className="text-sm text-text-secondary mt-1">{alert.detail}</p>
           </div>
         </div>
@@ -62,7 +62,7 @@ export default function AlertCard({ alert }: Props) {
           {route && (
             <button
               onClick={(e) => { e.stopPropagation(); navigate(route); }}
-              className="flex items-center gap-1.5 mt-3 text-xs font-medium text-chart-blue hover:underline"
+              className="flex items-center gap-1.5 mt-3 text-xs font-medium text-accent-gold hover:underline"
             >
               View details <ArrowRight className="w-3 h-3" />
             </button>

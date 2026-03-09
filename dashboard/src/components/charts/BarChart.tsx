@@ -33,10 +33,10 @@ export default function BarChart({
     return (
       <ResponsiveContainer width="100%" height={Math.max(height, data.length * 36)}>
         <ReBarChart data={data} layout="vertical" margin={{ top: 0, right: 4, bottom: 0, left: 0 }}>
-          <XAxis type="number" tick={{ fontSize: 11, fill: '#71717A' }} axisLine={false} tickLine={false} />
-          <YAxis type="category" dataKey={xKey} tick={{ fontSize: 11, fill: '#A1A1AA' }} axisLine={false} tickLine={false} width={100} />
-          <Tooltip contentStyle={{ fontSize: 13 }} />
-          <Bar dataKey={dataKey} name={name || dataKey} fill={color} radius={[0, 4, 4, 0]} />
+          <XAxis type="number" tick={{ fontSize: 11, fill: '#6B6560' }} axisLine={false} tickLine={false} />
+          <YAxis type="category" dataKey={xKey} tick={{ fontSize: 11, fill: '#A69F95' }} axisLine={false} tickLine={false} width={100} />
+          <Tooltip contentStyle={{ fontSize: 13, fontFamily: 'Outfit, sans-serif' }} />
+          <Bar dataKey={dataKey} name={name || dataKey} fill={color} radius={[0, 6, 6, 0]} />
         </ReBarChart>
       </ResponsiveContainer>
     );
@@ -45,10 +45,10 @@ export default function BarChart({
   return (
     <ResponsiveContainer width="100%" height={height}>
       <ReBarChart data={data} margin={{ top: 4, right: 4, bottom: 0, left: -20 }}>
-        <XAxis dataKey={xKey} tickFormatter={fmtDate} tick={{ fontSize: 11, fill: '#71717A' }} axisLine={false} tickLine={false} />
-        <YAxis tick={{ fontSize: 11, fill: '#71717A' }} axisLine={false} tickLine={false} />
-        <Tooltip contentStyle={{ fontSize: 13 }} labelFormatter={fmtDate} />
-        <Bar dataKey={dataKey} name={name || dataKey} fill={color} radius={[4, 4, 0, 0]} />
+        <XAxis dataKey={xKey} tickFormatter={fmtDate} tick={{ fontSize: 11, fill: '#6B6560' }} axisLine={false} tickLine={false} />
+        <YAxis tick={{ fontSize: 11, fill: '#6B6560' }} axisLine={false} tickLine={false} />
+        <Tooltip contentStyle={{ fontSize: 13, fontFamily: 'Outfit, sans-serif' }} labelFormatter={fmtDate} />
+        <Bar dataKey={dataKey} name={name || dataKey} fill={color} radius={[6, 6, 0, 0]} />
       </ReBarChart>
     </ResponsiveContainer>
   );

@@ -19,7 +19,7 @@ export default function Shell({ children, theme, onToggleTheme }: Props) {
         <button onClick={() => setSidebarOpen(true)} className="text-text-secondary hover:text-text-primary">
           <Menu className="w-6 h-6" />
         </button>
-        <span className="ml-3 text-lg font-semibold tracking-tight">Health Intel</span>
+        <span className="ml-3 text-lg font-serif tracking-tight">Health Intel</span>
       </div>
 
       {/* Overlay backdrop */}
@@ -28,7 +28,7 @@ export default function Shell({ children, theme, onToggleTheme }: Props) {
       )}
 
       <Sidebar theme={theme} onToggleTheme={onToggleTheme} mobileOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
-      <main className="ml-0 lg:ml-60 p-4 pt-18 lg:pt-8 lg:p-8 max-w-[1400px]">
+      <main className="ml-0 lg:ml-64 p-4 pt-18 lg:pt-10 lg:p-10 max-w-[1440px]">
         {children}
       </main>
     </div>

@@ -1,0 +1,302 @@
+
+ ▐▛███▜▌   Claude Code v2.1.63
+▝▜█████▛▘  Opus 4.6 · Claude Max
+  ▘▘ ▝▝    ~/Projects/health-intel
+
+╭──────────────────────────────────────────────────────────────────────────────╮
+│ Plan to implement                                                            │
+│                                                                              │
+│ Blood Work (TRT) Integration                                                 │
+│                                                                              │
+│ Context                                                                      │
+│                                                                              │
+│ The user has 5 blood work PDFs from Manual.co (TRT monitoring) in            │
+│ data/raw/manual/. These contain ~30 blood markers per test across hormones,  │
+│ lipids, liver, kidney, thyroid, and full blood count panels. The goal is to  │
+│ integrate this data into the existing pipeline, API, and dashboard with a    │
+│ dedicated "Blood Work" page and cross-source correlations.                   │
+│                                                                              │
+│ Test dates: 2025-01-29 (pre-TRT baseline), 2025-04-03 (reduced panel),       │
+│ 2025-05-08, 2025-08-06, 2026-02-12                                           │
+│                                                                              │
+│ Data Approach                                                                │
+│                                                                              │
+│ Since the PDFs are printed web pages from Manual.co with no API available,   │
+│ and there are only 5 files, we'll pre-extract data into a structured JSON    │
+│ file rather than writing a fragile PDF parser. This mirrors the Boditrax CSV │
+│  mode approach — manual data, pipeline-ready format.                         │
+│                                                                              │
+│ File: data/raw/manual/bloodwork.json — array of test objects, each with date │
+│  and markers dict.                                                           │
+│                                                                              │
+│ Extracted Markers (column names for CSV)                                     │
+│                                                                              │
+│ Hormones (TRT-critical):                                                     │
+│ - testosterone_nmol — Total Testosterone (nmol/l)                            │
+│ - free_testosterone_nmol — Free Testosterone (nmol/l)                        │
+│ - oestradiol_pmol — Oestradiol (pmol/l)                                      │
+│ - shbg_nmol — Sex-Hormone Binding Globulin (nmol/l)                          │
+│ - fsh_u — Follicle-Stimulating Hormone (U/l)                                 │
+│ - lh_u — Luteinising Hormone (U/l)                                           │
+│ - prolactin_miu — Prolactin (mIU/l)                                          │
+│ - psa_ug — Prostate Specific Antigen (µg/l)                                  │
+│                                                                              │
+│ Lipids:                                                                      │
+│ - total_cholesterol_mmol — Total Cholesterol (mmol/l)                        │
+│ - hdl_mmol — HDL (mmol/l)                                                    │
+│ - ldl_mmol — LDL (mmol/l)                                                    │
+│ - cholesterol_hdl_ratio — Total Cholesterol/HDL Ratio                        │
+│                                                                              │
+│ Liver:                                                                       │
+│ - alt_u — ALT (U/l)                                                          │
+│ - alp_u — Alkaline Phosphatase (U/l)                                         │
+│ - ggt_u — GGT (U/l)                                                          │
+│ - albumin_g — Albumin (g/l)                                                  │
+│ - bilirubin_umol — Total Bilirubin (µmol/l)                                  │
+│                                                                              │
+│ Kidney:                                                                      │
+│ - creatinine_umol — Creatinine (µmol/l)                                      │
+│ - egfr_ml — eGFR (ml/min/1.73m²)                                             │
+│ - urea_mmol — Urea (mmol/l)                                                  │
+│                                                                              │
+│ Thyroid:                                                                     │
+│ - tsh_miu — TSH (mIU/l)                                                      │
+│ - free_t3_pmol — Free T3 (pmol/l)                                            │
+│ - free_t4_pmol — Free T4 (pmol/l)                                            │
+│                                                                              │
+│ Blood (TRT safety):                                                          │
+│ - haematocrit_pct — Haematocrit (%)                                          │
+│ - haemoglobin_g — Haemoglobin (g/l)                                          │
+│ - rbc_count — Red Blood Cells (10^12/L)                                      │
+│ - wbc_count — White Blood Cells (10^9/L)                                     │
+│ - platelets_count — Platelets (10^9/L)                                       │
+│ - mcv_fl — Mean Cell Volume (fl)                                             │
+│ - mch_pg — Mean Cell Haemoglobin (pg)                                        │
+│ - mchc_g — MCHC (g/l)                                                        │
+│                                                                              │
+│ Other:                                                                       │
+│ - hba1c_mmol — HbA1c (mmol/mol)                                              │
+│ - ferritin_ug — Ferritin (µg/l)                                              │
+│                                                                              │
+│ Reference Ranges (for chart bands and alerts)                                │
+│                                                                              │
+│ REFERENCE_RANGES = {                                                         │
+│     "testosterone_nmol": {"low": 15, "optimal_min": 18, "optimal_max":       │
+│ 25.7},                                                                       │
+│     "free_testosterone_nmol": {"low": 0.35, "optimal_min": 0.5,              │
+│ "optimal_max": 0.8},                                                         │
+│     "oestradiol_pmol": {"low": 41, "optimal_max": 159, "high": 220},         │
+│     "haematocrit_pct": {"low": 38, "high": 50, "critical": 54},              │
+│     "psa_ug": {"normal_max": 1.4, "high": 4.0},                              │
+│     "hdl_mmol": {"low": 1.0, "optimal_min": 1.0, "optimal_max": 2.5},        │
+│     "ldl_mmol": {"normal_max": 3.0},                                         │
+│     "alt_u": {"normal_max": 50},                                             │
+│     "egfr_ml": {"low": 60},                                                  │
+│     "tsh_miu": {"low": 0.27, "high": 4.2},                                   │
+│     "hba1c_mmol": {"low": 20, "high": 42},                                   │
+│ }                                                                            │
+│                                                                              │
+│ Implementation Plan (4 phases, ~12 files)                                    │
+│                                                                              │
+│ Phase 1: Data Layer (3 new files + 2 modified)                               │
+│                                                                              │
+│ NEW data/raw/manual/bloodwork.json — Pre-extracted data from all 5 PDFs      │
+│ - Array of { "date": "YYYY-MM-DD", "markers": { ... } } objects              │
+│ - null for missing/error markers (e.g., FSH/LH errors in Apr 2025, Feb 2026) │
+│ - Values are raw numbers from the PDFs                                       │
+│                                                                              │
+│ NEW src/sources/bloodwork.py — Source client                                 │
+│ - BloodworkSource class following the Boditrax CSV pattern                   │
+│ - pull(): reads data/raw/manual/bloodwork.json, returns {"results": [...]}   │
+│ - save_raw(): copies/writes to data/raw/bloodwork/results_{start}_{end}.json │
+│ - No API calls, no PDF parsing — reads the pre-extracted JSON                │
+│                                                                              │
+│ MODIFY src/transform.py — Add transform_bloodwork()                          │
+│ - Load from data/raw/manual/bloodwork.json (or raw bloodwork dir)            │
+│ - pd.json_normalize() to flatten markers into columns                        │
+│ - Parse dates, sort chronologically                                          │
+│ - Validate ranges (add bloodwork-specific ranges to _VALID_RANGES)           │
+│ - Save to data/processed/bloodwork.csv                                       │
+│                                                                              │
+│ MODIFY src/extract.py — Add bloodwork extraction block                       │
+│ - No env var needed (reads local files)                                      │
+│ - Call BloodworkSource().pull() and save_raw()                               │
+│                                                                              │
+│ NEW tests/test_bloodwork.py — Unit tests                                     │
+│ - Test transform with sample fixture data                                    │
+│ - Test empty/missing file handling                                           │
+│ - Test range validation                                                      │
+│                                                                              │
+│ Phase 2: API Layer (2 modified files)                                        │
+│                                                                              │
+│ MODIFY src/api/server.py — Register bloodwork dataset                        │
+│ - Add "bloodwork": "bloodwork.csv" to csv_files dict in load_datasets()      │
+│                                                                              │
+│ MODIFY src/api/routes.py — Add endpoints                                     │
+│ - GET /api/bloodwork — all blood work records (date-filtered)                │
+│ - GET /api/bloodwork/latest — most recent test with reference range status   │
+│ - GET /api/bloodwork/trends — per-marker time series with reference bands    │
+│ - Response includes reference_ranges for frontend chart bands                │
+│                                                                              │
+│ Phase 3: Dashboard (4 new/modified files)                                    │
+│                                                                              │
+│ NEW dashboard/src/pages/BloodWork.tsx — Main page                            │
+│                                                                              │
+│ Layout (matching existing clinical luxury design):                           │
+│ Header: "Blood Work"                                                         │
+│                                                                              │
+│ KPI Cards (2 rows: 4 + 3, animate-stagger):                                  │
+│ Row 1: Testosterone | Free T | Oestradiol | Haematocrit                      │
+│ Row 2: PSA | HbA1c | HDL                                                     │
+│                                                                              │
+│ Chart sections:                                                              │
+│ 1. "Hormone Panel" — TrendChart: Testosterone + Free T (dual series)         │
+│ 2. "TRT Safety Markers" — TrendChart: Haematocrit + Haemoglobin with         │
+│ reference band                                                               │
+│ 3. "Lipid Panel" — BarChart per test date: Total Chol, HDL, LDL, Ratio       │
+│ 4. "Liver Function" — TrendChart: ALT, GGT, ALP                              │
+│ 5. "Kidney Function" — TrendChart: Creatinine, eGFR, Urea                    │
+│ 6. "Thyroid" — TrendChart: TSH, FT3, FT4                                     │
+│ 7. "Full Results Table" — All markers, color-coded by status                 │
+│ (low/normal/high)                                                            │
+│                                                                              │
+│ KPI cards show:                                                              │
+│ - Latest value with unit                                                     │
+│ - Trend arrow (direction from previous test)                                 │
+│ - Color based on reference range status (sage=normal, terracotta=out of      │
+│ range)                                                                       │
+│ - target prop for in/below/above range display                               │
+│                                                                              │
+│ MODIFY dashboard/src/hooks/queries.ts — Add hooks                            │
+│ - useBloodwork() — fetches /bloodwork                                        │
+│ - useBloodworkLatest() — fetches /bloodwork/latest                           │
+│                                                                              │
+│ MODIFY dashboard/src/App.tsx — Add route                                     │
+│ - Lazy import: const BloodWork = lazy(() => import('./pages/BloodWork.tsx')) │
+│ - Route: <Route path="/bloodwork" element={<BloodWork />} />                 │
+│                                                                              │
+│ MODIFY dashboard/src/components/layout/Sidebar.tsx — Add nav link            │
+│ - Add { to: '/bloodwork', icon: Syringe, label: 'Blood Work' } (using Lucide │
+│  Syringe icon)                                                               │
+│ - Position after Body Composition, before Correlations                       │
+│                                                                              │
+│ Phase 4: Correlations & Alerts (2 modified files)                            │
+│                                                                              │
+│ MODIFY src/correlate.py — Add blood work correlations                        │
+│                                                                              │
+│ Since blood work is sparse (5 data points over 13 months), standard Pearson  │
+│ correlations won't meet the MIN_DATAPOINTS=14 threshold. Instead, add a      │
+│ window-based comparison section:                                             │
+│                                                                              │
+│ def _bloodwork_context(results, bloodwork_df, other_dfs):                    │
+│     """For each blood test date, compute surrounding health metric           │
+│ averages."""                                                                 │
+│     # For each test date, get 14-day window average of:                      │
+│     #   - Sleep score, Readiness score, HRV balance                          │
+│     #   - Training volume (weekly avg around test date)                      │
+│     # Store as overlay data for dashboard display                            │
+│                                                                              │
+│ This produces overlay data (not r-values) for the dashboard to show:         │
+│ - Testosterone trend with sleep/readiness overlaid at test dates             │
+│ - Haematocrit trend with RHR overlaid                                        │
+│                                                                              │
+│ MODIFY src/report.py — Add blood work alerts                                 │
+│ - Haematocrit > 50%: high severity (polycythaemia risk on TRT)               │
+│ - Haematocrit > 48%: medium severity (approaching limit)                     │
+│ - PSA rising trend or > 1.4: medium severity                                 │
+│ - HDL < 1.0: medium severity (persistently low)                              │
+│ - Oestradiol out of range (< 41 or > 159): medium severity                   │
+│ - Free T still low despite TRT: medium severity                              │
+│ - Liver enzymes elevated (ALT > 50): medium severity                         │
+│ - eGFR < 60: high severity                                                   │
+│                                                                              │
+│ Files Summary                                                                │
+│                                                                              │
+│ ┌───────┬──────────────────────────────────────────┬─────────────────────┐   │
+│ │ Actio │                   File                   │       Purpose       │   │
+│ │   n   │                                          │                     │   │
+│ ├───────┼──────────────────────────────────────────┼─────────────────────┤   │
+│ │ CREAT │ data/raw/manual/bloodwork.json           │ Pre-extracted blood │   │
+│ │ E     │                                          │  work data          │   │
+│ ├───────┼──────────────────────────────────────────┼─────────────────────┤   │
+│ │ CREAT │ src/sources/bloodwork.py                 │ Source client       │   │
+│ │ E     │                                          │ (reads JSON)        │   │
+│ ├───────┼──────────────────────────────────────────┼─────────────────────┤   │
+│ │ CREAT │ tests/test_bloodwork.py                  │ Unit tests          │   │
+│ │ E     │                                          │                     │   │
+│ ├───────┼──────────────────────────────────────────┼─────────────────────┤   │
+│ │ CREAT │ dashboard/src/pages/BloodWork.tsx        │ Dashboard page      │   │
+│ │ E     │                                          │                     │   │
+│ ├───────┼──────────────────────────────────────────┼─────────────────────┤   │
+│ │ MODIF │                                          │ Add transform_blood │   │
+│ │ Y     │ src/transform.py                         │ work() + valid      │   │
+│ │       │                                          │ ranges              │   │
+│ ├───────┼──────────────────────────────────────────┼─────────────────────┤   │
+│ │ MODIF │ src/extract.py                           │ Add bloodwork       │   │
+│ │ Y     │                                          │ extraction block    │   │
+│ ├───────┼──────────────────────────────────────────┼─────────────────────┤   │
+│ │ MODIF │ src/api/server.py                        │ Register bloodwork  │   │
+│ │ Y     │                                          │ CSV                 │   │
+│ ├───────┼──────────────────────────────────────────┼─────────────────────┤   │
+│ │ MODIF │ src/api/routes.py                        │ Add /api/bloodwork  │   │
+│ │ Y     │                                          │ endpoints           │   │
+│ ├───────┼──────────────────────────────────────────┼─────────────────────┤   │
+│ │ MODIF │ src/correlate.py                         │ Add window-based    │   │
+│ │ Y     │                                          │ blood work context  │   │
+│ ├───────┼──────────────────────────────────────────┼─────────────────────┤   │
+│ │ MODIF │ src/report.py                            │ Add blood work      │   │
+│ │ Y     │                                          │ alerts              │   │
+│ ├───────┼──────────────────────────────────────────┼─────────────────────┤   │
+│ │ MODIF │ dashboard/src/App.tsx                    │ Add route           │   │
+│ │ Y     │                                          │                     │   │
+│ ├───────┼──────────────────────────────────────────┼─────────────────────┤   │
+│ │ MODIF │ dashboard/src/hooks/queries.ts           │ Add useBloodwork    │   │
+│ │ Y     │                                          │ hook                │   │
+│ ├───────┼──────────────────────────────────────────┼─────────────────────┤   │
+│ │ MODIF │ dashboard/src/components/layout/Sidebar. │ Add nav link        │   │
+│ │ Y     │ tsx                                      │                     │   │
+│ └───────┴──────────────────────────────────────────┴─────────────────────┘   │
+│                                                                              │
+│ Verification                                                                 │
+│                                                                              │
+│ 1. cd dashboard && npm run dev + .venv/bin/uvicorn src.api.server:app --port │
+│  8000 --reload                                                               │
+│ 2. Navigate to /bloodwork — verify all KPIs, charts, and table render        │
+│ 3. Verify testosterone trend shows 5 data points with correct values         │
+│ 4. Verify KPI cards show reference range status (in range / below / above)   │
+│ 5. Verify haematocrit chart shows reference band at 50%                      │
+│ 6. Navigate to /alerts — verify blood work alerts appear                     │
+│ 7. .venv/bin/pytest tests/ -v — all existing + new tests pass                │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+● I'll implement this in 4 phases. Let me start by reading the key existing
+  files to understand patterns.
+
+● Let me read the existing files I need to understand and modify.
+
+● Read 4 files (ctrl+o to expand)
+
+● Now let me read the PDFs and the remaining files I need to modify.
+
+● Read 5 files (ctrl+o to expand)
+  ⎿  API Error: Rate limit reached
+
+✻ Worked for 35s
+
+❯ What API rate limit was reached? 
+  ⎿  API Error: Rate limit reached
+
+❯ /usage 
+  ⎿  Status dialog dismissed
+
+❯ /exit 
+  ⎿  See ya!
+
+❯ continue with the plan 
+  ⎿  API Error: Rate limit reached
+
+❯ /usage 
+  ⎿  Status dialog dismissed
+
+❯ continue with the plan 
+  ⎿  API Error: Rate limit reached

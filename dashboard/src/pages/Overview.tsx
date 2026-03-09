@@ -77,7 +77,7 @@ export default function Overview() {
   const heatmapMetrics = [
     { key: 'score', label: 'Sleep Score', data: sleepRes?.data || [], color: chartColors.sleep },
     { key: 'score', label: 'Readiness', data: readinessRes?.data || [], color: chartColors.recovery },
-    { key: 'steps', label: 'Steps', data: activityRes?.data || [], color: '#3B82F6' },
+    { key: 'steps', label: 'Steps', data: activityRes?.data || [], color: '#C9A96E' },
     { key: 'calories', label: 'Calories', data: nutritionRes?.data || [], color: chartColors.nutrition },
   ];
   const [heatmapIdx, setHeatmapIdx] = useState(0);
@@ -86,13 +86,13 @@ export default function Overview() {
   const metricColors = [
     chartColors.sleep,       // Sleep Score
     chartColors.recovery,    // Readiness
-    '#3B82F6',               // Daily Steps
+    '#C9A96E',               // Daily Steps
     chartColors.warning,     // Sedentary
     chartColors.nutrition,   // Avg Calories
     chartColors.stress,      // Resting HR
     chartColors.nutrition,   // Logging %
     chartColors.training,    // Volume/Week
-    '#A1A1AA',               // Weight
+    '#A69F95',               // Weight
     chartColors.warning,     // Cal Balance
   ];
 
@@ -141,7 +141,7 @@ export default function Overview() {
       <Header title="Overview" />
 
       {/* Metric cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-3 gap-4 lg:gap-6 mb-8">
+      <div className="grid grid-cols-2 lg:grid-cols-3 gap-5 lg:gap-7 mb-10 animate-stagger">
         {isLoading
           ? Array.from({ length: 6 }).map((_, i) => (
               <MetricCard key={i} label="" value={null} unit="" trend={null} sparkline={[]} loading />
@@ -156,7 +156,7 @@ export default function Overview() {
                   unit={m.unit}
                   trend={m.trend}
                   sparkline={m.sparkline}
-                  color={metricColors[i] || '#3B82F6'}
+                  color={metricColors[i] || '#C9A96E'}
                   invertTrend={m.invert_trend}
                   target={m.target ?? undefined}
                   goal={g ? { target: g.target, direction: g.direction } : undefined}
@@ -166,7 +166,7 @@ export default function Overview() {
       </div>
 
       {/* Training Recommendation + Streaks */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 lg:gap-6 mb-8">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 lg:gap-7 mb-8">
         {/* Training Recommendation */}
         {trainingRec && trainingRec.score != null && (
           <ChartCard title="Today's Training Readiness" subtitle={trainingRec.detail}>
@@ -176,7 +176,7 @@ export default function Overview() {
                   <circle cx="18" cy="18" r="15.5" fill="none" stroke="currentColor" className="text-border-subtle" strokeWidth="3" />
                   <circle
                     cx="18" cy="18" r="15.5" fill="none"
-                    stroke={trainingRec.intensity === 'hard' ? chartColors.recovery : trainingRec.intensity === 'moderate' ? '#3B82F6' : trainingRec.intensity === 'light' ? chartColors.warning : chartColors.stress}
+                    stroke={trainingRec.intensity === 'hard' ? chartColors.recovery : trainingRec.intensity === 'moderate' ? '#C9A96E' : trainingRec.intensity === 'light' ? chartColors.warning : chartColors.stress}
                     strokeWidth="3"
                     strokeDasharray={`${trainingRec.score * 0.9738} 97.38`}
                     strokeLinecap="round"
@@ -212,7 +212,7 @@ export default function Overview() {
                     <span className="text-xs text-text-muted ml-2">{s.target}</span>
                   </div>
                   <div className="flex items-center gap-3 text-sm">
-                    <span className={`font-semibold ${s.current > 0 ? 'text-chart-emerald' : 'text-text-muted'}`}>
+                    <span className={`font-semibold ${s.current > 0 ? 'text-chart-sage' : 'text-text-muted'}`}>
                       {s.current} {s.unit}
                     </span>
                     <span className="text-text-muted text-xs">best: {s.best}</span>
@@ -225,7 +225,7 @@ export default function Overview() {
       </div>
 
       {/* Charts row */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 lg:gap-6 mb-8">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 lg:gap-7 mb-8">
         <ChartCard title="Sleep & Readiness" subtitle="Weekly averages" exportData={overlayData}>
           <TrendChart
             data={overlayData}
@@ -292,7 +292,7 @@ export default function Overview() {
                           {c.period_b != null ? fmtNumber(c.period_b, 1) : '—'}
                         </td>
                         <td className={`text-right py-2 pl-4 font-medium ${
-                          c.improved == null ? 'text-text-muted' : c.improved ? 'text-chart-emerald' : 'text-chart-rose'
+                          c.improved == null ? 'text-text-muted' : c.improved ? 'text-chart-sage' : 'text-chart-rose'
                         }`}>
                           {c.delta != null ? `${c.delta > 0 ? '+' : ''}${fmtNumber(c.delta, 1)}` : '—'}
                         </td>
@@ -316,7 +316,7 @@ export default function Overview() {
                 onClick={() => setHeatmapIdx(i)}
                 className={`px-3 py-1 text-xs rounded-full transition-colors ${
                   i === heatmapIdx
-                    ? 'bg-bg-elevated text-text-primary font-medium'
+                    ? 'bg-accent-gold/10 text-accent-gold font-medium'
                     : 'text-text-muted hover:text-text-secondary'
                 }`}
               >
@@ -335,12 +335,12 @@ export default function Overview() {
       {/* Personal records */}
       {(recordsRes?.records || []).length > 0 && (
         <div className="mb-8">
-          <h2 className="text-lg font-medium mb-4">Personal Records</h2>
+          <h2 className="text-lg font-serif mb-4">Personal Records</h2>
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
             {recordsRes!.records.map((r, i) => (
-              <div key={i} className="bg-bg-card border border-border-subtle rounded-xl p-4">
+              <div key={i} className="bg-bg-card border border-border-subtle rounded-2xl p-4">
                 <p className="text-xs text-text-muted font-medium truncate">{r.label}</p>
-                <p className="text-2xl font-semibold tracking-tight mt-1">
+                <p className="text-2xl font-serif tracking-tight mt-1">
                   {fmtNumber(r.value, r.value % 1 !== 0 ? 1 : 0)}
                   {r.unit && <span className="text-sm text-text-muted ml-1">{r.unit}</span>}
                 </p>
@@ -353,8 +353,8 @@ export default function Overview() {
 
       {/* Intervention Tracking */}
       <div className="mb-8">
-        <h2 className="text-lg font-medium mb-4">Intervention Tracking</h2>
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 lg:gap-6">
+        <h2 className="text-lg font-serif mb-4">Intervention Tracking</h2>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 lg:gap-7">
           <ChartCard title="Log Intervention" subtitle="Track when you change something">
             <div className="space-y-3">
               <input
@@ -391,7 +391,7 @@ export default function Overview() {
                     }
                   }}
                   disabled={!newIntLabel || !newIntDate}
-                  className="px-4 py-2 bg-chart-blue text-white rounded-lg text-sm font-medium disabled:opacity-40 hover:opacity-90 transition-opacity"
+                  className="px-4 py-2 bg-accent-gold text-white rounded-xl text-sm font-medium disabled:opacity-40 hover:opacity-90 transition-opacity"
                 >
                   Add
                 </button>
@@ -451,7 +451,7 @@ export default function Overview() {
                           {m.after != null ? fmtNumber(m.after, 1) : '—'}
                         </td>
                         <td className={`text-right py-2 pl-4 font-medium ${
-                          m.improved == null ? 'text-text-muted' : m.improved ? 'text-chart-emerald' : 'text-chart-rose'
+                          m.improved == null ? 'text-text-muted' : m.improved ? 'text-chart-sage' : 'text-chart-rose'
                         }`}>
                           {m.delta != null ? `${m.delta > 0 ? '+' : ''}${fmtNumber(m.delta, 1)}` : '—'}
                         </td>
@@ -468,9 +468,9 @@ export default function Overview() {
       </div>
 
       {/* Alerts + Correlations */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 lg:gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 lg:gap-7">
         <div>
-          <h2 className="text-lg font-medium mb-4">Top Alerts</h2>
+          <h2 className="text-lg font-serif mb-4">Top Alerts</h2>
           <div className="space-y-3">
             {overview?.alerts.slice(0, 3).map((a, i) => (
               <AlertCard key={i} alert={a} />
@@ -481,7 +481,7 @@ export default function Overview() {
           </div>
         </div>
         <div>
-          <h2 className="text-lg font-medium mb-4">Strongest Correlations</h2>
+          <h2 className="text-lg font-serif mb-4">Strongest Correlations</h2>
           <div className="space-y-4">
             {topCorrelations.map(c => {
               const xKey = Object.keys(c.points[0] || {}).find(k => k !== 'day') || '';

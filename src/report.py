@@ -56,6 +56,61 @@ def _corr_strength(corr: float | None) -> str:
     return "weak"
 
 
+# ── Blood Work Section ──
+
+def _bloodwork_section(datasets: dict[str, pd.DataFrame]) -> str:
+    lines = ["## Blood Work (TRT Monitoring)", ""]
+    bw_df = datasets.get("bloodwork", pd.DataFrame())
+
+    if bw_df.empty:
+        lines.append("*No blood work data available for this period.*\n")
+        return "\n".join(lines)
+
+    latest = bw_df.sort_values("day").iloc[-1]
+    lines.append(f"**Latest Test:** {latest['day'].strftime('%Y-%m-%d') if hasattr(latest['day'], 'strftime') else latest['day']}\n")
+
+    # Key markers summary
+    markers = [
+        ("testosterone_nmol", "Total Testosterone", "nmol/l"),
+        ("free_testosterone_nmol", "Free Testosterone", "nmol/l"),
+        ("oestradiol_pmol", "Oestradiol", "pmol/l"),
+        ("haematocrit_pct", "Haematocrit", "%"),
+        ("psa_ug", "PSA", "µg/l"),
+        ("hba1c_mmol", "HbA1c", "mmol/mol"),
+    ]
+    for col, label, unit in markers:
+        if col in latest.index and pd.notna(latest[col]):
+            lines.append(f"- **{label}:** {latest[col]:.2f} {unit}")
+    lines.append("")
+
+    # Testosterone Trend Chart
+    if len(bw_df) >= 2 and "testosterone_nmol" in bw_df.columns:
+        fig, ax = plt.subplots()
+        ax.plot(bw_df["day"], bw_df["testosterone_nmol"], marker="o", color="#7A6FBE", label="Total Testosterone")
+        if "free_testosterone_nmol" in bw_df.columns:
+            ax2 = ax.twinx()
+            ax2.plot(bw_df["day"], bw_df["free_testosterone_nmol"], marker="s", color="#50B88E", label="Free Testosterone")
+            ax2.set_ylabel("Free T (nmol/l)")
+            lines.append(_embed_chart(fig, "Testosterone Trend"))
+        else:
+            ax.set_ylabel("Total T (nmol/l)")
+            lines.append(_embed_chart(fig, "Testosterone Trend"))
+        lines.append("")
+
+    # Haematocrit Trend
+    if len(bw_df) >= 2 and "haematocrit_pct" in bw_df.columns:
+        fig, ax = plt.subplots()
+        ax.plot(bw_df["day"], bw_df["haematocrit_pct"], marker="o", color="#E63946")
+        ax.axhline(y=50, color="#E63946", linestyle="--", alpha=0.5, label="Upper limit (50%)")
+        ax.set_ylabel("Haematocrit (%)")
+        ax.set_title("Haematocrit Trend (TRT Safety)")
+        ax.legend(loc="upper left", fontsize=8)
+        lines.append(_embed_chart(fig, "Haematocrit Trend"))
+        lines.append("")
+
+    return "\n".join(lines)
+
+
 # ── Nutrition Section (MFP) ──
 
 def _nutrition_section(datasets: dict[str, pd.DataFrame]) -> str:
@@ -1763,6 +1818,8 @@ def generate_report(
     sections.append("---\n")
 
     # Sections in spec order
+    sections.append(_bloodwork_section(datasets))
+    sections.append("---\n")
     sections.append(_nutrition_section(datasets))
     sections.append("---\n")
     sections.append(_sleep_recovery_section(datasets))

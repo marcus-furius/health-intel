@@ -17,8 +17,8 @@ export default function Header({ title }: Props) {
         <h1>{title} — Health Intel</h1>
         <span>Generated {today}</span>
       </div>
-      <header className="no-print flex items-center justify-between mb-8">
-        <h1 className="text-2xl font-semibold tracking-tight">{title}</h1>
+      <header className="no-print flex items-center justify-between mb-10">
+        <h1 className="text-3xl font-serif tracking-tight">{title}</h1>
         <div className="flex items-center gap-3">
           <DateRangePicker value={range} onChange={setRange} />
           <PrintExport />

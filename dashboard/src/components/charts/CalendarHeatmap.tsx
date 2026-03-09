@@ -16,7 +16,7 @@ function interpolateOpacity(value: number, min: number, max: number): number {
   return 0.15 + 0.85 * ((value - min) / (max - min));
 }
 
-export default function CalendarHeatmap({ data, dataKey, color = '#3B82F6', weeks = 16 }: Props) {
+export default function CalendarHeatmap({ data, dataKey, color = '#C9A96E', weeks = 16 }: Props) {
   const { grid, monthLabels, min, max } = useMemo(() => {
     // Build value lookup
     const byDay: Record<string, number> = {};
@@ -90,7 +90,7 @@ export default function CalendarHeatmap({ data, dataKey, color = '#3B82F6', week
             x={labelWidth + m.col * (CELL + GAP)}
             y={12}
             fontSize={10}
-            fill="#71717A"
+            fill="#6B6560"
           >
             {m.label}
           </text>
@@ -104,7 +104,7 @@ export default function CalendarHeatmap({ data, dataKey, color = '#3B82F6', week
               x={0}
               y={headerHeight + i * (CELL + GAP) + CELL - 2}
               fontSize={10}
-              fill="#71717A"
+              fill="#6B6560"
             >
               {label}
             </text>
@@ -119,7 +119,7 @@ export default function CalendarHeatmap({ data, dataKey, color = '#3B82F6', week
             y={headerHeight + cell.row * (CELL + GAP)}
             width={CELL}
             height={CELL}
-            rx={3}
+            rx={4}
             fill={cell.value != null ? color : 'currentColor'}
             opacity={cell.value != null ? interpolateOpacity(cell.value, min, max) : 0.08}
           >

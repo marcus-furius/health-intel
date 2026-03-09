@@ -104,13 +104,13 @@ export default function Training() {
     <div>
       <Header title="Training" />
 
-      <div className="grid grid-cols-2 lg:grid-cols-3 gap-4 lg:gap-6 mb-8">
+      <div className="grid grid-cols-2 lg:grid-cols-3 gap-5 lg:gap-7 mb-10 animate-stagger">
         <MetricCard label="Sessions/Week" value={sessionsPerWeek} unit="avg" trend={null} sparkline={[]} color={chartColors.training} loading={isLoading} />
         <MetricCard label="Volume/Week" value={avgVolume} unit="kg" trend={null} sparkline={[]} color={chartColors.training} loading={isLoading} />
         <MetricCard label="Total Sessions" value={totalSessions} unit="" trend={null} sparkline={[]} color={chartColors.training} loading={isLoading} />
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 lg:gap-6 mb-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 lg:gap-7 mb-6">
         <ChartCard title="Weekly Volume" loading={isLoading}>
           <BarChart data={weeklyVolume} dataKey="volume" color={chartColors.training} name="Volume (kg)" />
         </ChartCard>
@@ -126,7 +126,7 @@ export default function Training() {
         </ChartCard>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 lg:gap-6 mb-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 lg:gap-7 mb-6">
         <ChartCard title="Volume vs HRV Balance" subtitle="Weekly overlay">
           <TrendChart
             data={volumeHrvOverlay}
@@ -138,7 +138,7 @@ export default function Training() {
         </ChartCard>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 lg:gap-6 mb-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 lg:gap-7 mb-6">
         <ChartCard title="Training Intensity Profile" subtitle="Volume by rep range">
           {(intensityRes?.summary || []).length > 0 ? (
             <BarChart
@@ -170,7 +170,7 @@ export default function Training() {
       </div>
 
       {(intensityRes?.daily || []).length > 0 && (
-        <div className="grid grid-cols-1 gap-4 lg:gap-6 mb-6">
+        <div className="grid grid-cols-1 gap-5 lg:gap-7 mb-6">
           <ChartCard title="Intensity Distribution Over Time" subtitle="Daily volume by rep range">
             <StackedBar
               data={intensityRes!.daily as Record<string, unknown>[]}
@@ -206,7 +206,7 @@ export default function Training() {
           <select
             value={effectiveExercise}
             onChange={e => setSelectedExercise(e.target.value)}
-            className="bg-bg-elevated border border-border-subtle rounded-lg px-3 py-2 text-sm text-text-primary focus:outline-none focus:border-border-default"
+            className="bg-bg-elevated border border-border-subtle rounded-xl px-3 py-2 text-sm text-text-primary focus:outline-none focus:border-border-default"
           >
             {exerciseNames.map(name => (
               <option key={name} value={name}>{name}</option>

@@ -15,6 +15,7 @@ import {
   Heart,
   RefreshCw,
   X,
+  Syringe,
 } from 'lucide-react';
 import { apiReload } from '../../lib/api.ts';
 
@@ -24,6 +25,7 @@ const links = [
   { to: '/training', icon: Dumbbell, label: 'Training' },
   { to: '/nutrition', icon: Apple, label: 'Nutrition' },
   { to: '/body', icon: Scale, label: 'Body Composition' },
+  { to: '/bloodwork', icon: Syringe, label: 'Blood Work' },
   { to: '/correlations', icon: GitCompareArrows, label: 'Correlations' },
   { to: '/alerts', icon: AlertTriangle, label: 'Alerts' },
   { to: '/digest', icon: CalendarDays, label: 'Weekly Digest' },
@@ -51,11 +53,11 @@ export default function Sidebar({ theme, onToggleTheme, mobileOpen, onClose }: P
   }
 
   return (
-    <aside className={`no-print fixed left-0 top-0 bottom-0 w-60 bg-bg-card border-r border-border-subtle flex flex-col z-40 transition-transform duration-200 ${mobileOpen ? 'translate-x-0' : '-translate-x-full'} lg:translate-x-0`}>
-      <div className="flex items-center justify-between px-5 py-5 border-b border-border-subtle">
+    <aside className={`no-print fixed left-0 top-0 bottom-0 w-64 bg-bg-card border-r border-border-subtle flex flex-col z-40 transition-transform duration-200 ${mobileOpen ? 'translate-x-0' : '-translate-x-full'} lg:translate-x-0`}>
+      <div className="flex items-center justify-between px-6 py-6 border-b border-border-subtle">
         <div className="flex items-center gap-2.5">
-          <Heart className="w-6 h-6 text-chart-rose" />
-          <span className="text-lg font-semibold tracking-tight">Health Intel</span>
+          <Heart className="w-6 h-6 text-accent-gold" />
+          <span className="text-lg font-serif tracking-tight">Health Intel</span>
         </div>
         {onClose && (
           <button onClick={onClose} className="lg:hidden text-text-secondary hover:text-text-primary">
@@ -63,7 +65,7 @@ export default function Sidebar({ theme, onToggleTheme, mobileOpen, onClose }: P
           </button>
         )}
       </div>
-      <nav className="flex-1 py-3 px-3 space-y-0.5 overflow-y-auto">
+      <nav className="flex-1 py-3 px-4 space-y-0.5 overflow-y-auto">
         {links.map(({ to, icon: Icon, label }) => (
           <NavLink
             key={to}
@@ -71,10 +73,10 @@ export default function Sidebar({ theme, onToggleTheme, mobileOpen, onClose }: P
             end={to === '/'}
             onClick={onClose}
             className={({ isActive }) =>
-              `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+              `flex items-center gap-3 px-3 py-2.5 text-sm font-medium transition-colors border-l-[3px] ${
                 isActive
-                  ? 'bg-bg-elevated text-text-primary'
-                  : 'text-text-secondary hover:text-text-primary hover:bg-bg-elevated/50'
+                  ? 'border-accent-gold text-accent-gold bg-accent-gold/5'
+                  : 'border-transparent text-text-secondary hover:text-text-primary hover:bg-bg-elevated/50'
               }`
             }
           >
@@ -83,7 +85,7 @@ export default function Sidebar({ theme, onToggleTheme, mobileOpen, onClose }: P
           </NavLink>
         ))}
       </nav>
-      <div className="px-3 pb-4 space-y-0.5">
+      <div className="px-4 pb-4 space-y-0.5">
         <button
           onClick={handleReload}
           disabled={reloading}

@@ -1,15 +1,16 @@
 {
-  "transformed_at": "2026-03-08T15:15:16.343988",
+  "transformed_at": "2026-03-09T07:01:16.270503",
   "record_counts": {
-    "sleep": 349,
-    "readiness": 349,
-    "activity": 360,
-    "heartrate": 2,
-    "spo2": 341,
-    "stress": 358,
-    "workouts": 2756,
+    "sleep": 415,
+    "readiness": 415,
+    "activity": 427,
+    "heartrate": 7,
+    "spo2": 406,
+    "stress": 424,
+    "workouts": 11002,
     "body_composition": 74,
     "nutrition": 248,
-    "mfp_weight": 114
+    "mfp_weight": 114,
+    "bloodwork": 5
   }
 }

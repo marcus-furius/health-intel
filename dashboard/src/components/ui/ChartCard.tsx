@@ -34,10 +34,10 @@ function downloadCsv(data: Record<string, unknown>[], filename: string) {
 
 export default function ChartCard({ title, subtitle, children, loading, className = '', exportData }: Props) {
   return (
-    <div className={`bg-bg-card border border-border-subtle rounded-xl p-6 transition-all hover:border-border-default hover:shadow-lg hover:shadow-black/5 ${className}`}>
-      <div className="flex items-start justify-between mb-4">
+    <div className={`bg-bg-card border border-border-subtle rounded-2xl p-7 animate-card-enter transition-all hover:border-border-default hover:shadow-lg hover:shadow-[#0F0E0D]/10 ${className}`}>
+      <div className="flex items-start justify-between mb-5">
         <div>
-          <h3 className="text-lg font-medium text-text-primary">{title}</h3>
+          <h3 className="text-lg font-serif text-text-primary">{title}</h3>
           {subtitle && <p className="text-sm text-text-muted mt-0.5">{subtitle}</p>}
         </div>
         {exportData && exportData.length > 0 && (

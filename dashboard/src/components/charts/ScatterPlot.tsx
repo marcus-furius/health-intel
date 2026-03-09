@@ -29,7 +29,7 @@ export default function ScatterPlot({
   yLabel,
   rValue,
   strength,
-  color = '#3B82F6',
+  color = '#C9A96E',
   height = 220,
 }: Props) {
   if (!data.length) return <p className="text-sm text-text-muted">No data available</p>;
@@ -48,7 +48,7 @@ export default function ScatterPlot({
             dataKey={xKey}
             name={xLabel}
             type="number"
-            tick={{ fontSize: 11, fill: '#71717A' }}
+            tick={{ fontSize: 11, fill: '#6B6560' }}
             axisLine={false}
             tickLine={false}
           />
@@ -56,16 +56,16 @@ export default function ScatterPlot({
             dataKey={yKey}
             name={yLabel}
             type="number"
-            tick={{ fontSize: 11, fill: '#71717A' }}
+            tick={{ fontSize: 11, fill: '#6B6560' }}
             axisLine={false}
             tickLine={false}
           />
           <ZAxis range={[30, 30]} />
           <Tooltip
-            contentStyle={{ fontSize: 12 }}
+            contentStyle={{ fontSize: 12, fontFamily: 'Outfit, sans-serif' }}
             formatter={(val: number | undefined) => val?.toFixed?.(1) ?? String(val)}
           />
-          <Scatter data={data} fill={color} fillOpacity={0.6} />
+          <Scatter data={data} fill={color} fillOpacity={0.7} />
         </ScatterChart>
       </ResponsiveContainer>
       <p className="text-xs text-text-muted mt-1">{xLabel} vs {yLabel}</p>

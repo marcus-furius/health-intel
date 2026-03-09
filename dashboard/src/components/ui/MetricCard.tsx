@@ -1,13 +1,7 @@
 import SparkLine from '../charts/SparkLine.tsx';
 import Skeleton from './Skeleton.tsx';
 import { fmtNumber, trendArrow, trendColor } from '../../lib/format.ts';
-import type { SparkPoint } from '../../lib/api.ts';
-
-interface TargetZone {
-  min?: number;
-  max?: number;
-  label?: string;
-}
+import type { SparkPoint, TargetZone } from '../../lib/api.ts';
 
 interface GoalInfo {
   target: number;
@@ -23,11 +17,11 @@ interface Props {
   color?: string;
   loading?: boolean;
   invertTrend?: boolean;
-  target?: TargetZone;
+  target?: TargetZone | null;
   goal?: GoalInfo;
 }
 
-function targetStatus(value: number | null, target: TargetZone | undefined): 'in' | 'below' | 'above' | null {
+function targetStatus(value: number | null, target: TargetZone | null | undefined): 'in' | 'below' | 'above' | null {
   if (value == null || !target) return null;
   if (target.min != null && value < target.min) return 'below';
   if (target.max != null && value > target.max) return 'above';

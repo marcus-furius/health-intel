@@ -9,6 +9,7 @@ interface Props {
   loading?: boolean;
   className?: string;
   exportData?: Record<string, unknown>[];
+  headerAction?: ReactNode;
 }
 
 function downloadCsv(data: Record<string, unknown>[], filename: string) {
@@ -32,7 +33,7 @@ function downloadCsv(data: Record<string, unknown>[], filename: string) {
   URL.revokeObjectURL(url);
 }
 
-export default function ChartCard({ title, subtitle, children, loading, className = '', exportData }: Props) {
+export default function ChartCard({ title, subtitle, children, loading, className = '', exportData, headerAction }: Props) {
   return (
     <div className={`bg-bg-card border border-border-subtle rounded-2xl p-7 animate-card-enter transition-all hover:border-border-default hover:shadow-lg hover:shadow-[#0F0E0D]/10 ${className}`}>
       <div className="flex items-start justify-between mb-5">
@@ -40,15 +41,18 @@ export default function ChartCard({ title, subtitle, children, loading, classNam
           <h3 className="text-lg font-serif text-text-primary">{title}</h3>
           {subtitle && <p className="text-sm text-text-muted mt-0.5">{subtitle}</p>}
         </div>
-        {exportData && exportData.length > 0 && (
-          <button
-            onClick={() => downloadCsv(exportData, title.toLowerCase().replace(/\s+/g, '_'))}
-            className="no-print text-text-muted hover:text-text-secondary transition-colors p-1"
-            title="Export CSV"
-          >
-            <Download className="w-4 h-4" />
-          </button>
-        )}
+        <div className="flex items-center gap-2">
+          {headerAction}
+          {exportData && exportData.length > 0 && (
+            <button
+              onClick={() => downloadCsv(exportData, title.toLowerCase().replace(/\s+/g, '_'))}
+              className="no-print text-text-muted hover:text-text-secondary transition-colors p-1"
+              title="Export CSV"
+            >
+              <Download className="w-4 h-4" />
+            </button>
+          )}
+        </div>
       </div>
       {loading ? (
         <div className="space-y-3">

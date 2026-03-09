@@ -10,6 +10,7 @@ interface Series {
   color: string;
   name: string;
   type?: 'area' | 'line';
+  yAxisId?: string;
 }
 
 interface Props {
@@ -67,6 +68,7 @@ export default function TrendChart({
           color: s.color,
           name: `${s.name} (${rollingWindow}d avg)`,
           type: 'line' as const,
+          yAxisId: s.yAxisId,
         })),
       ]
     : series;
@@ -74,6 +76,8 @@ export default function TrendChart({
   const hasArea = allSeries.some(s => s.type !== 'line');
   const isRollingLine = (s: Series) =>
     showRolling && showRollingToggle && s.dataKey.endsWith('_avg');
+
+  const hasRightAxis = allSeries.some(s => s.yAxisId === 'right');
 
   const toggle = showRollingToggle && data.length >= rollingWindow ? (
     <div className="flex justify-end mb-1">
@@ -90,65 +94,50 @@ export default function TrendChart({
     </div>
   ) : null;
 
-  if (!hasArea) {
-    return (
-      <div>
-        {toggle}
-        <ResponsiveContainer width="100%" height={height}>
-          <LineChart data={chartData} margin={{ top: 4, right: 4, bottom: 0, left: -20 }}>
-            <XAxis dataKey={xKey} tickFormatter={fmtDate} tick={{ fontSize: 11, fill: '#6B6560' }} axisLine={false} tickLine={false} />
-            <YAxis tick={{ fontSize: 11, fill: '#6B6560' }} axisLine={false} tickLine={false} domain={domain} />
-            <Tooltip contentStyle={{ fontSize: 13, fontFamily: 'Outfit, sans-serif' }} labelFormatter={fmtDate} />
-            {allSeries.map(s => (
-              <Line
-                key={s.dataKey}
-                type="monotone"
-                dataKey={s.dataKey}
-                name={s.name}
-                stroke={s.color}
-                strokeWidth={isRollingLine(s) ? 3 : 1.5}
-                strokeOpacity={isRollingLine(s) ? 1 : 0.4}
-                dot={false}
-                strokeDasharray={isRollingLine(s) ? undefined : undefined}
-              />
-            ))}
-          </LineChart>
-        </ResponsiveContainer>
-      </div>
-    );
-  }
+  const ChartComp = hasArea ? AreaChart : LineChart;
 
   return (
     <div>
       {toggle}
       <ResponsiveContainer width="100%" height={height}>
-        <AreaChart data={chartData} margin={{ top: 4, right: 4, bottom: 0, left: -20 }}>
-          <defs>
-            {allSeries.map(s => (
-              <linearGradient key={s.dataKey} id={`grad-${s.dataKey}`} x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor={s.color} stopOpacity={0.4} />
-                <stop offset="100%" stopColor={s.color} stopOpacity={0} />
-              </linearGradient>
-            ))}
-          </defs>
+        <ChartComp data={chartData} margin={{ top: 4, right: hasRightAxis ? 20 : 4, bottom: 0, left: -20 }}>
+          {hasArea && (
+            <defs>
+              {allSeries.map(s => (
+                <linearGradient key={s.dataKey} id={`grad-${s.dataKey}`} x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor={s.color} stopOpacity={0.4} />
+                  <stop offset="100%" stopColor={s.color} stopOpacity={0} />
+                </linearGradient>
+              ))}
+            </defs>
+          )}
           <XAxis dataKey={xKey} tickFormatter={fmtDate} tick={{ fontSize: 11, fill: '#6B6560' }} axisLine={false} tickLine={false} />
-          <YAxis tick={{ fontSize: 11, fill: '#6B6560' }} axisLine={false} tickLine={false} domain={domain} />
+          <YAxis yAxisId="left" tick={{ fontSize: 11, fill: '#6B6560' }} axisLine={false} tickLine={false} domain={domain} />
+          {hasRightAxis && (
+            <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 11, fill: '#6B6560' }} axisLine={false} tickLine={false} domain={['auto', 'auto']} />
+          )}
           <Tooltip contentStyle={{ fontSize: 13, fontFamily: 'Outfit, sans-serif' }} labelFormatter={fmtDate} />
-          {allSeries.map(s =>
-            s.type === 'line' || isRollingLine(s) ? (
-              <Line
-                key={s.dataKey}
-                type="monotone"
-                dataKey={s.dataKey}
-                name={s.name}
-                stroke={s.color}
-                strokeWidth={isRollingLine(s) ? 3 : 2}
-                strokeOpacity={showRolling && showRollingToggle && !isRollingLine(s) ? 0.4 : 1}
-                dot={false}
-              />
-            ) : (
+          {allSeries.map(s => {
+            const isLine = s.type === 'line' || isRollingLine(s) || !hasArea;
+            if (isLine) {
+              return (
+                <Line
+                  key={s.dataKey}
+                  yAxisId={s.yAxisId || 'left'}
+                  type="monotone"
+                  dataKey={s.dataKey}
+                  name={s.name}
+                  stroke={s.color}
+                  strokeWidth={isRollingLine(s) ? 3 : 1.5}
+                  strokeOpacity={isRollingLine(s) ? 1 : (showRolling && showRollingToggle ? 0.4 : 1)}
+                  dot={false}
+                />
+              );
+            }
+            return (
               <Area
                 key={s.dataKey}
+                yAxisId={s.yAxisId || 'left'}
                 type="monotone"
                 dataKey={s.dataKey}
                 name={s.name}
@@ -159,9 +148,9 @@ export default function TrendChart({
                 fillOpacity={showRolling && showRollingToggle ? 0.3 : 1}
                 dot={false}
               />
-            )
-          )}
-        </AreaChart>
+            );
+          })}
+        </ChartComp>
       </ResponsiveContainer>
     </div>
   );

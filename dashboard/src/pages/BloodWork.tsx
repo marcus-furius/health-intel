@@ -2,6 +2,7 @@ import Header from '../components/layout/Header.tsx';
 import MetricCard from '../components/ui/MetricCard.tsx';
 import ChartCard from '../components/ui/ChartCard.tsx';
 import TrendChart from '../components/charts/TrendChart.tsx';
+import DataExport from '../components/ui/DataExport.tsx';
 import { useBloodwork } from '../hooks/queries.ts';
 import { fmtNumber, fmtDateLong } from '../lib/format.ts';
 import { chartColors } from '../lib/colors.ts';
@@ -24,7 +25,8 @@ export default function BloodWork() {
         if (Array.isArray(r[0])) {
           return (r as number[][]).some(sub => v >= sub[0] && v <= sub[1]);
         }
-        return v >= r[0] && v <= r[1];
+        const rArray = r as number[];
+        return v >= rArray[0] && v <= rArray[1];
       }
       return false;
     }
@@ -54,6 +56,27 @@ export default function BloodWork() {
     { label: 'HbA1c', marker: 'hba1c_mmol', unit: 'mmol/mol' },
     { label: 'HDL', marker: 'hdl_mmol', unit: 'mmol/l' },
   ];
+
+  const markerLabels: Record<string, string> = {
+    day: 'Date',
+    testosterone_nmol: 'Total Testosterone (nmol/l)',
+    free_testosterone_nmol: 'Free Testosterone (nmol/l)',
+    oestradiol_pmol: 'Oestradiol (pmol/l)',
+    shbg_nmol: 'SHBG (nmol/l)',
+    prolactin_miu: 'Prolactin (mIU/l)',
+    psa_ug: 'PSA (µg/l)',
+    haematocrit_pct: 'Haematocrit (%)',
+    haemoglobin_g: 'Haemoglobin (g/l)',
+    rbc_count: 'Red Blood Cells (10^12/L)',
+    wbc_count: 'White Blood Cells (10^9/L)',
+    total_cholesterol_mmol: 'Total Cholesterol (mmol/l)',
+    hdl_mmol: 'HDL (mmol/l)',
+    ldl_mmol: 'LDL (mmol/l)',
+    alt_u: 'ALT (U/l)',
+    egfr_ml: 'eGFR (ml/min/1.73m²)',
+    tsh_miu: 'TSH (mIU/l)',
+    hba1c_mmol: 'HbA1c (mmol/mol)',
+  };
 
   return (
     <div>
@@ -155,7 +178,17 @@ export default function BloodWork() {
         </ChartCard>
       </div>
 
-      <ChartCard title="Full Results History" className="mt-6">
+      <ChartCard 
+        title="Full Results History" 
+        className="mt-6"
+        headerAction={
+          <DataExport 
+            data={tests as Record<string, unknown>[]} 
+            filename={`blood_work_history_${new Date().toISOString().split('T')[0]}`}
+            labels={markerLabels}
+          />
+        }
+      >
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>

@@ -1,17 +1,17 @@
 {
   "source": "oura",
-  "last_sync": "2026-03-09T06:55:50.347106",
-  "start_date": "2025-01-01",
+  "last_sync": "2026-03-09T10:54:30.720023",
+  "start_date": "2026-03-08",
   "end_date": "2026-03-09",
   "record_counts": {
-    "daily_sleep": 415,
-    "sleep": 732,
-    "daily_readiness": 415,
-    "daily_activity": 427,
-    "heartrate": 1550,
-    "daily_spo2": 406,
-    "daily_stress": 424
+    "daily_sleep": 2,
+    "sleep": 1,
+    "daily_readiness": 2,
+    "daily_activity": 1,
+    "heartrate": 1693,
+    "daily_spo2": 2,
+    "daily_stress": 2
   },
   "last_sync_date": "2026-03-09",
-  "last_sync_at": "2026-03-09T06:55:50.347502"
+  "last_sync_at": "2026-03-09T10:54:30.720443"
 }

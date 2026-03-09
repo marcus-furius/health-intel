@@ -844,10 +844,10 @@ def _recent_trend(series: pd.Series, window: int = 28) -> float | None:
 
 
 def compute_alerts(datasets: dict[str, pd.DataFrame], correlations: dict[str, Any]) -> list[dict[str, str]]:
-    """Compute structured alerts from datasets and correlations.
+    """Compute structured alerts from datasets and correlations based on Dashboard Business Rules.
 
     Returns a list of dicts, each with keys: severity, title, detail, intervention.
-    Sorted by severity (high → medium → low → positive).
+    Sorted by severity (critical → high → medium → low → positive).
     """
     alerts: list[dict[str, str]] = []
 
@@ -858,451 +858,498 @@ def compute_alerts(datasets: dict[str, pd.DataFrame], correlations: dict[str, An
     body_df = datasets.get("body_composition", pd.DataFrame())
     nutrition_df = datasets.get("nutrition", pd.DataFrame())
     spo2_df = datasets.get("spo2", pd.DataFrame())
+    bloodwork_df = datasets.get("bloodwork", pd.DataFrame())
+    mfp_weight_df = datasets.get("mfp_weight", pd.DataFrame())
 
-    # ── Body Composition Alerts ──
+    # ── Domain 1 & 2: Blood Work (Hormonal & TRT Safety) ──
 
-    if not body_df.empty and len(body_df) >= 3:
+    if not bloodwork_df.empty:
+        latest = bloodwork_df.sort_values("day").iloc[-1]
+        
+        # BR-H01 | Total Testosterone
+        if "testosterone_nmol" in latest and pd.notna(latest["testosterone_nmol"]):
+            val = latest["testosterone_nmol"]
+            if val < 12:
+                alerts.append({
+                    "severity": "critical", "category": "bloodwork", "title": "Critical Low Testosterone",
+                    "detail": f"Total Testosterone is {val:.1f} nmol/L (BR-H01 < 12).",
+                    "intervention": "Contact Manual clinic immediately."
+                })
+            elif val < 15:
+                alerts.append({
+                    "severity": "high", "category": "bloodwork", "title": "Low Testosterone",
+                    "detail": f"Total Testosterone is {val:.1f} nmol/L (BR-H01 12–14.9).",
+                    "intervention": "Contact Manual clinic — discuss dose adjustment."
+                })
+            elif val < 20:
+                alerts.append({
+                    "severity": "medium", "category": "bloodwork", "title": "Suboptimal Testosterone",
+                    "detail": f"Total Testosterone is {val:.1f} nmol/L (BR-H01 15–19.9).",
+                    "intervention": "Review timing of blood draw; confirm pre-injection trough sample."
+                })
+
+        # BR-H02 | Free Testosterone
+        if "free_testosterone_nmol" in latest and pd.notna(latest["free_testosterone_nmol"]):
+            val = latest["free_testosterone_nmol"]
+            if val < 0.30:
+                alerts.append({
+                    "severity": "critical", "category": "bloodwork", "title": "Critical Low Free T",
+                    "detail": f"Free Testosterone is {val:.3f} nmol/L (BR-H02 < 0.30).",
+                    "intervention": "Clinical review required."
+                })
+            elif val < 0.40:
+                alerts.append({
+                    "severity": "high", "category": "bloodwork", "title": "Low Free Testosterone",
+                    "detail": f"Free Testosterone is {val:.3f} nmol/L (BR-H02 0.30–0.39).",
+                    "intervention": "Review SHBG, dose timing, discuss with clinic."
+                })
+            elif val <= 0.50:
+                alerts.append({
+                    "severity": "medium", "category": "bloodwork", "title": "Suboptimal Free Testosterone",
+                    "detail": f"Free Testosterone is {val:.3f} nmol/L (BR-H02 0.40–0.50).",
+                    "intervention": "Check SHBG trend; consider boron optimisation."
+                })
+
+        # BR-H03 | Oestradiol (E2)
+        if "oestradiol_pmol" in latest and pd.notna(latest["oestradiol_pmol"]):
+            val = latest["oestradiol_pmol"]
+            if val < 75:
+                alerts.append({
+                    "severity": "high", "category": "bloodwork", "title": "Low Oestradiol",
+                    "detail": f"Oestradiol is {val:.1f} pmol/L (BR-H03 < 75).",
+                    "intervention": "Risk: joint pain, low libido, mood depression — clinical review."
+                })
+            elif val > 200:
+                alerts.append({
+                    "severity": "high", "category": "bloodwork", "title": "High Oestradiol",
+                    "detail": f"Oestradiol is {val:.1f} pmol/L (BR-H03 > 200).",
+                    "intervention": "Risk: gynecomastia, water retention — clinical review."
+                })
+            elif val < 100:
+                alerts.append({
+                    "severity": "medium", "category": "bloodwork", "title": "Suboptimal Oestradiol",
+                    "detail": f"Oestradiol is {val:.1f} pmol/L (BR-H03 75–99).",
+                    "intervention": "Monitor libido, joint comfort, mood; may be suboptimal."
+                })
+            elif val > 150:
+                alerts.append({
+                    "severity": "medium", "category": "bloodwork", "title": "Elevated Oestradiol",
+                    "detail": f"Oestradiol is {val:.1f} pmol/L (BR-H03 150–200).",
+                    "intervention": "Watch for bloating, nipple sensitivity, mood changes."
+                })
+
+        # BR-H04 | SHBG
+        if "shbg_nmol" in latest and pd.notna(latest["shbg_nmol"]):
+            val = latest["shbg_nmol"]
+            if val > 40:
+                alerts.append({
+                    "severity": "high", "category": "bloodwork", "title": "High SHBG",
+                    "detail": f"SHBG is {val:.1f} nmol/L (BR-H04 > 40).",
+                    "intervention": "Clinical review; high SHBG binding excess testosterone."
+                })
+            elif val > 30:
+                alerts.append({
+                    "severity": "medium", "category": "bloodwork", "title": "Elevated SHBG",
+                    "detail": f"SHBG is {val:.1f} nmol/L (BR-H04 30–40).",
+                    "intervention": "Consider boron 6–10mg/day; recheck in 6–8 weeks."
+                })
+            elif val < 18:
+                alerts.append({
+                    "severity": "medium", "category": "bloodwork", "title": "Low SHBG",
+                    "detail": f"SHBG is {val:.1f} nmol/L (BR-H04 < 18).",
+                    "intervention": "Monitor — very low SHBG can indicate insulin resistance."
+                })
+
+        # BR-H05 | Prolactin
+        if "prolactin_miu" in latest and pd.notna(latest["prolactin_miu"]):
+            val = latest["prolactin_miu"]
+            if val > 350:
+                alerts.append({
+                    "severity": "critical", "category": "bloodwork", "title": "Critical High Prolactin",
+                    "detail": f"Prolactin is {val:.1f} mIU/L (BR-H05 > 350).",
+                    "intervention": "Rule out prolactinoma — urgent GP/endocrinology referral."
+                })
+            elif val > 200:
+                alerts.append({
+                    "severity": "high", "category": "bloodwork", "title": "High Prolactin",
+                    "detail": f"Prolactin is {val:.1f} mIU/L (BR-H05 200–350).",
+                    "intervention": "Clinical review — elevated prolactin suppresses libido and testosterone effect."
+                })
+            elif val > 100:
+                alerts.append({
+                    "severity": "medium", "category": "bloodwork", "title": "Elevated Prolactin",
+                    "detail": f"Prolactin is {val:.1f} mIU/L (BR-H05 100–200).",
+                    "intervention": "Monitor libido and sexual function; recheck in 3 months."
+                })
+
+        # BR-S01 | PSA
+        if "psa_ug" in latest and pd.notna(latest["psa_ug"]):
+            val = latest["psa_ug"]
+            if val > 3.5:
+                alerts.append({
+                    "severity": "critical", "category": "bloodwork", "title": "Critical PSA",
+                    "detail": f"PSA is {val:.2f} µg/l (BR-S01 > 3.5).",
+                    "intervention": "Stop TRT protocol adjustment; urgent urology referral."
+                })
+            elif val > 2.5:
+                alerts.append({
+                    "severity": "high", "category": "bloodwork", "title": "High PSA",
+                    "detail": f"PSA is {val:.2f} µg/l (BR-S01 2.5–3.5).",
+                    "intervention": "Increase to 3-monthly monitoring; clinical review."
+                })
+            elif val >= 1.5:
+                alerts.append({
+                    "severity": "medium", "category": "bloodwork", "title": "Elevated PSA",
+                    "detail": f"PSA is {val:.2f} µg/l (BR-S01 1.5–2.5).",
+                    "intervention": "Continue 6-monthly; track velocity closely."
+                })
+
+        # BR-S02 | Haematocrit
+        if "haematocrit_pct" in latest and pd.notna(latest["haematocrit_pct"]):
+            val = latest["haematocrit_pct"]
+            if val > 50:
+                alerts.append({
+                    "severity": "critical", "category": "bloodwork", "title": "Critical Haematocrit",
+                    "detail": f"Haematocrit is {val:.1f}% (BR-S02 > 50%).",
+                    "intervention": "Pause TRT; urgent clinical review; consider therapeutic phlebotomy."
+                })
+            elif val >= 48:
+                alerts.append({
+                    "severity": "high", "category": "bloodwork", "title": "High Haematocrit",
+                    "detail": f"Haematocrit is {val:.1f}% (BR-S02 48–50%).",
+                    "intervention": "Hold dose increase; discuss venesection with clinic."
+                })
+            elif val >= 46:
+                alerts.append({
+                    "severity": "medium", "category": "bloodwork", "title": "Elevated Haematocrit",
+                    "detail": f"Haematocrit is {val:.1f}% (BR-S02 46–48%).",
+                    "intervention": "Optimise hydration; increase water intake to 4L/day."
+                })
+
+        # BR-S03 | Haemoglobin
+        if "haemoglobin_g" in latest and pd.notna(latest["haemoglobin_g"]):
+            val = latest["haemoglobin_g"]
+            if val > 170:
+                alerts.append({
+                    "severity": "critical", "category": "bloodwork", "title": "Critical Haemoglobin",
+                    "detail": f"Haemoglobin is {val:.0f} g/L (BR-S03 > 170).",
+                    "intervention": "Urgent review; cardiovascular risk elevated."
+                })
+            elif val > 165:
+                alerts.append({
+                    "severity": "high", "category": "bloodwork", "title": "High Haemoglobin",
+                    "detail": f"Haemoglobin is {val:.0f} g/L (BR-S03 165–170).",
+                    "intervention": "Clinical review."
+                })
+            elif val >= 155:
+                alerts.append({
+                    "severity": "medium", "category": "bloodwork", "title": "Elevated Haemoglobin",
+                    "detail": f"Haemoglobin is {val:.0f} g/L (BR-S03 155–165).",
+                    "intervention": "Monitor with haematocrit."
+                })
+
+        # BR-S04 | eGFR
+        if "egfr_ml" in latest and pd.notna(latest["egfr_ml"]):
+            val = latest["egfr_ml"]
+            if val < 45:
+                alerts.append({
+                    "severity": "critical", "category": "bloodwork", "title": "Critical Low eGFR",
+                    "detail": f"eGFR is {val:.1f} ml/min (BR-S04 < 45).",
+                    "intervention": "Urgent nephrology review; suspend high protein protocol."
+                })
+            elif val < 60:
+                alerts.append({
+                    "severity": "high", "category": "bloodwork", "title": "Low eGFR",
+                    "detail": f"eGFR is {val:.1f} ml/min (BR-S04 45–60).",
+                    "intervention": "Reduce protein to 1.8g/kg; clinical review."
+                })
+            elif val <= 90:
+                alerts.append({
+                    "severity": "medium", "category": "bloodwork", "title": "Suboptimal eGFR",
+                    "detail": f"eGFR is {val:.1f} ml/min (BR-S04 60–90).",
+                    "intervention": "Monitor protein intake; check creatinine trend."
+                })
+
+        # BR-C02 & C03 | HDL & Ratio
+        if "hdl_mmol" in latest and pd.notna(latest["hdl_mmol"]):
+            hdl = latest["hdl_mmol"]
+            if hdl < 0.9:
+                alerts.append({
+                    "severity": "critical", "category": "bloodwork", "title": "Critical Low HDL",
+                    "detail": f"HDL is {hdl:.2f} mmol/L (BR-C03 < 0.9).",
+                    "intervention": "Clinical review; dose increase on hold until improved."
+                })
+            elif hdl <= 1.0:
+                alerts.append({
+                    "severity": "high", "category": "bloodwork", "title": "Low HDL",
+                    "detail": f"HDL is {hdl:.2f} mmol/L (BR-C03 0.9–1.0).",
+                    "intervention": "Structured aerobic work 3x/week; review TRT dose."
+                })
+            elif hdl <= 1.2:
+                alerts.append({
+                    "severity": "medium", "category": "bloodwork", "title": "Suboptimal HDL",
+                    "detail": f"HDL is {hdl:.2f} mmol/L (BR-C03 1.0–1.2).",
+                    "intervention": "Increase aerobic activity; omega-3 3g/day."
+                })
+
+        if "cholesterol_hdl_ratio" in latest and pd.notna(latest["cholesterol_hdl_ratio"]):
+            ratio = latest["cholesterol_hdl_ratio"]
+            if ratio > 5.0:
+                alerts.append({
+                    "severity": "critical", "category": "bloodwork", "title": "Critical Chol/HDL Ratio",
+                    "detail": f"Chol/HDL ratio is {ratio:.2f} (BR-C02 > 5.0).",
+                    "intervention": "Urgent cardiovascular risk assessment."
+                })
+            elif ratio >= 4.0:
+                alerts.append({
+                    "severity": "high", "category": "bloodwork", "title": "High Chol/HDL Ratio",
+                    "detail": f"Chol/HDL ratio is {ratio:.2f} (BR-C02 4.0–5.0).",
+                    "intervention": "Clinical review; dietary intervention."
+                })
+            elif ratio >= 3.5:
+                alerts.append({
+                    "severity": "medium", "category": "bloodwork", "title": "Suboptimal Chol/HDL Ratio",
+                    "detail": f"Chol/HDL ratio is {ratio:.2f} (BR-C02 3.5–4.0).",
+                    "intervention": "Target HDL improvement — increase omega-3 to 3g EPA/DHA."
+                })
+
+        # BR-C04 | HbA1c
+        if "hba1c_mmol" in latest and pd.notna(latest["hba1c_mmol"]):
+            val = latest["hba1c_mmol"]
+            if val >= 48:
+                alerts.append({
+                    "severity": "critical", "category": "bloodwork", "title": "Diabetic Range HbA1c",
+                    "detail": f"HbA1c is {val:.1f} mmol/mol (BR-C04 >= 48).",
+                    "intervention": "Urgent clinical review."
+                })
+            elif val >= 42:
+                alerts.append({
+                    "severity": "high", "category": "bloodwork", "title": "Pre-diabetic HbA1c",
+                    "detail": f"HbA1c is {val:.1f} mmol/mol (BR-C04 42–47).",
+                    "intervention": "Clinical review; reduce refined carbs."
+                })
+            elif val >= 38:
+                alerts.append({
+                    "severity": "medium", "category": "bloodwork", "title": "Suboptimal HbA1c",
+                    "detail": f"HbA1c is {val:.1f} mmol/mol (BR-C04 38–41).",
+                    "intervention": "Monitor; review refined carb intake."
+                })
+
+        # BR-C05 | MCV
+        if "mcv_fl" in latest and pd.notna(latest["mcv_fl"]):
+            val = latest["mcv_fl"]
+            if val > 100:
+                alerts.append({
+                    "severity": "high", "category": "bloodwork", "title": "High MCV (B12/Folate)",
+                    "detail": f"MCV is {val:.1f} fL (BR-C05 > 100).",
+                    "intervention": "B12/folate deficiency likely — supplement audit; retest in 8 weeks."
+                })
+            elif val > 95:
+                alerts.append({
+                    "severity": "medium", "category": "bloodwork", "title": "Elevated MCV",
+                    "detail": f"MCV is {val:.1f} fL (BR-C05 95–100).",
+                    "intervention": "Monitor B12/folate; confirm methylcobalamin form."
+                })
+
+    # ── Domain 4: Body Composition (Boditrax) ──
+
+    if not body_df.empty:
         sorted_body = body_df.sort_values("day")
+        latest_body = sorted_body.iloc[-1]
 
-        # Muscle mass trend (last 4+ scans)
-        if "muscle_mass_kg" in sorted_body.columns:
-            recent_muscle = sorted_body["muscle_mass_kg"].tail(6)
-            slope = _recent_trend(recent_muscle, window=len(recent_muscle))
-            if slope is not None and slope < -0.05:
-                first_val = recent_muscle.iloc[0]
-                last_val = recent_muscle.iloc[-1]
-                alerts.append({
-                    "severity": "high",
-                    "category": "body",
-                    "title": "Muscle Mass Declining",
-                    "detail": f"Muscle mass has dropped from {first_val:.1f} kg to {last_val:.1f} kg "
-                              f"over recent scans ({last_val - first_val:+.1f} kg).",
-                    "intervention": (
-                        "- Increase training volume, particularly for lagging muscle groups\n"
-                        "- Ensure protein intake is at least 1.6–2.2 g/kg bodyweight daily\n"
-                        "- Prioritise sleep quality (target 8+ hours) to support muscle protein synthesis\n"
-                        "- Consider a deload week if overreaching is suspected (check HRV trends)"
-                    ),
-                })
-            elif slope is not None and slope > 0.05:
-                alerts.append({
-                    "severity": "positive",
-                    "category": "body",
-                    "title": "Muscle Mass Increasing",
-                    "detail": f"Muscle mass is trending upward over recent scans — current trajectory is favourable.",
-                    "intervention": "- Maintain current training and nutrition approach\n- Continue monitoring to ensure the trend sustains",
-                })
-
-        # Fat mass / body fat trend
-        if "body_fat_pct" in sorted_body.columns:
-            recent_fat = sorted_body["body_fat_pct"].tail(6)
-            slope = _recent_trend(recent_fat, window=len(recent_fat))
-            if slope is not None and slope > 0.1:
-                first_val = recent_fat.iloc[0]
-                last_val = recent_fat.iloc[-1]
-                alerts.append({
-                    "severity": "high" if last_val > 20 else "medium",
-                    "category": "body",
-                    "title": "Body Fat Increasing",
-                    "detail": f"Body fat has risen from {first_val:.1f}% to {last_val:.1f}% over recent scans.",
-                    "intervention": (
-                        "- Review caloric intake — you may be in a larger surplus than intended\n"
-                        "- Increase daily movement (target 10,000+ steps) to raise TDEE\n"
-                        "- Add 1–2 conditioning sessions per week (e.g. 20 min incline walk, rowing)\n"
-                        "- If intentionally bulking, monitor the rate — aim for <0.5% body fat gain per month"
-                    ),
-                })
-            elif slope is not None and slope < -0.1:
-                alerts.append({
-                    "severity": "positive",
-                    "category": "body",
-                    "title": "Body Fat Decreasing",
-                    "detail": f"Body fat is trending downward — current approach is working.",
-                    "intervention": "- Maintain current deficit and activity levels\n- Watch for muscle loss alongside fat loss (check muscle mass trend)",
-                })
-
-        # Visceral fat warning
-        if "visceral_fat" in sorted_body.columns:
-            latest_vf = sorted_body["visceral_fat"].iloc[-1]
-            if pd.notna(latest_vf) and latest_vf >= 12:
-                alerts.append({
-                    "severity": "high",
-                    "category": "body",
-                    "title": "Elevated Visceral Fat",
-                    "detail": f"Visceral fat rating is {latest_vf:.0f} (healthy range: 1–12, ideal: <9).",
-                    "intervention": (
-                        "- Prioritise reducing overall body fat through caloric deficit\n"
-                        "- Increase aerobic activity — visceral fat responds well to consistent cardio\n"
-                        "- Reduce alcohol and refined sugar intake\n"
-                        "- Consider consulting a healthcare professional if persistently elevated"
-                    ),
-                })
-
-        # Unfavourable recomposition: gaining fat while losing muscle
-        if "muscle_mass_kg" in sorted_body.columns and "fat_mass_kg" in sorted_body.columns:
+        # BR-B01 | Muscle Mass trend
+        if "muscle_mass_kg" in sorted_body.columns and len(sorted_body) >= 2:
             recent_muscle = sorted_body["muscle_mass_kg"].tail(4)
-            recent_fat_mass = sorted_body["fat_mass_kg"].tail(4)
-            if len(recent_muscle) >= 3:
-                muscle_delta = recent_muscle.iloc[-1] - recent_muscle.iloc[0]
-                fat_delta = recent_fat_mass.iloc[-1] - recent_fat_mass.iloc[0]
-                if muscle_delta < -0.3 and fat_delta > 0.3:
+            slope = _recent_trend(recent_muscle, window=len(recent_muscle))
+            if slope is not None:
+                rate_per_month = slope * 30
+                if rate_per_month < -0.5:
                     alerts.append({
-                        "severity": "high",
-                        "category": "body",
-                        "title": "Unfavourable Recomposition",
-                        "detail": f"Losing muscle ({muscle_delta:+.1f} kg) while gaining fat ({fat_delta:+.1f} kg) "
-                                  f"over recent scans — this is the opposite of the desired direction.",
-                        "intervention": (
-                            "- Urgently review training stimulus — ensure progressive overload is maintained\n"
-                            "- Increase protein to 2.0+ g/kg bodyweight\n"
-                            "- Reduce caloric surplus or move to maintenance calories\n"
-                            "- Prioritise compound movements and adequate training volume (10+ hard sets per muscle group/week)"
-                        ),
+                        "severity": "critical", "category": "body", "title": "Critical Muscle Loss",
+                        "detail": f"Muscle mass declining at {rate_per_month:.2f} kg/month (BR-B01).",
+                        "intervention": "Investigate acute cause; clinical review if unexplained."
+                    })
+                elif rate_per_month < -0.3:
+                    alerts.append({
+                        "severity": "high", "category": "body", "title": "Significant Muscle Loss",
+                        "detail": f"Muscle mass declining at {rate_per_month:.2f} kg/month (BR-B01).",
+                        "intervention": "Check for overtraining, under-eating, illness; add deload."
+                    })
+                elif rate_per_month < 0.3:
+                    alerts.append({
+                        "severity": "medium", "category": "body", "title": "Stagnant Muscle Growth",
+                        "detail": f"Muscle mass stable ({rate_per_month:+.2f} kg/month).",
+                        "intervention": "Review caloric surplus; confirm protein ≥ 190g/day."
+                    })
+                elif rate_per_month >= 0.3:
+                    alerts.append({
+                        "severity": "positive", "category": "body", "title": "Optimal Muscle Gain",
+                        "detail": f"Muscle mass increasing at {rate_per_month:.2f} kg/month.",
+                        "intervention": "Optimal — maintain protocol."
                     })
 
-    # ── Sleep & Recovery Alerts ──
-
-    if not sleep_df.empty and "score" in sleep_df.columns:
-        recent_sleep = sleep_df.sort_values("day").tail(28)
-        avg_recent = recent_sleep["score"].mean()
-        low_sleep_days = (recent_sleep["score"] < 60).sum()
-
-        if avg_recent < 65:
-            alerts.append({
-                "severity": "high",
-                "category": "sleep",
-                "title": "Poor Recent Sleep Quality",
-                "detail": f"Average sleep score over the last 28 days is {avg_recent:.0f} (below 65 threshold).",
-                "intervention": (
-                    "- Establish a consistent sleep/wake schedule (±30 min even on weekends)\n"
-                    "- Avoid screens 1 hour before bed; keep the bedroom cool (18–19°C)\n"
-                    "- Limit caffeine after 2pm and alcohol within 3 hours of bedtime\n"
-                    "- Consider magnesium glycinate supplementation (200–400 mg before bed)"
-                ),
-            })
-        elif low_sleep_days >= 7:
-            alerts.append({
-                "severity": "medium",
-                "category": "sleep",
-                "title": "Frequent Poor Sleep Nights",
-                "detail": f"{low_sleep_days} nights with sleep score below 60 in the last 28 days.",
-                "intervention": (
-                    "- Identify patterns — are poor nights linked to late training, alcohol, or screen time?\n"
-                    "- Track evening habits alongside sleep scores to find your triggers\n"
-                    "- Consider adjusting training intensity on days following poor sleep"
-                ),
-            })
-
-        # Declining sleep trend
-        slope = _recent_trend(sleep_df.sort_values("day")["score"], window=28)
-        if slope is not None and slope < -0.2:
-            alerts.append({
-                "severity": "medium",
-                "category": "sleep",
-                "title": "Declining Sleep Trend",
-                "detail": "Sleep scores are trending downward over the last 4 weeks.",
-                "intervention": (
-                    "- Assess potential stressors (work, life changes, overtraining)\n"
-                    "- Review training load — a deload week may help if HRV is also declining\n"
-                    "- Ensure adequate wind-down routine before bed"
-                ),
-            })
-
-    # ── Readiness / HRV Alerts ──
-
-    if not readiness_df.empty and "score" in readiness_df.columns:
-        recent_readiness = readiness_df.sort_values("day").tail(14)
-        low_readiness_streak = 0
-        for val in reversed(recent_readiness["score"].values):
-            if val < 60:
-                low_readiness_streak += 1
-            else:
-                break
-
-        if low_readiness_streak >= 3:
-            alerts.append({
-                "severity": "high",
-                "category": "sleep",
-                "title": "Sustained Low Readiness",
-                "detail": f"{low_readiness_streak} consecutive days with readiness below 60 — possible overreaching.",
-                "intervention": (
-                    "- Take a deload or rest day immediately\n"
-                    "- Reduce training volume by 40–50% for the next 3–5 days\n"
-                    "- Prioritise sleep, hydration, and nutrition\n"
-                    "- If readiness remains low for 7+ days, consider a full deload week"
-                ),
-            })
-
-        hrv_col = next((c for c in ["contributors.hrv_balance", "hrv_balance"] if c in readiness_df.columns), None)
-        if hrv_col:
-            slope = _recent_trend(readiness_df.sort_values("day")[hrv_col], window=28)
-            if slope is not None and slope < -0.15:
+        # BR-B02 | Fat Mass
+        if "fat_mass_kg" in latest_body and pd.notna(latest_body["fat_mass_kg"]):
+            val = latest_body["fat_mass_kg"]
+            if val > 16.0:
                 alerts.append({
-                    "severity": "medium",
-                    "category": "sleep",
-                    "title": "HRV Balance Declining",
-                    "detail": "HRV balance has been trending downward — this often precedes illness or overtraining.",
-                    "intervention": (
-                        "- Reduce training intensity (keep volume, lower load) for the next week\n"
-                        "- Increase sleep opportunity by 30–60 minutes\n"
-                        "- Check for early signs of illness (sore throat, fatigue)\n"
-                        "- Ensure adequate micronutrient intake (vitamin D, zinc, magnesium)"
-                    ),
+                    "severity": "critical", "category": "body", "title": "Excessive Fat Mass",
+                    "detail": f"Fat mass is {val:.1f} kg (BR-B02 > 16kg).",
+                    "intervention": "Stop bulk; structured cut required."
+                })
+            elif val >= 14.5:
+                alerts.append({
+                    "severity": "high", "category": "body", "title": "High Fat Mass",
+                    "detail": f"Fat mass is {val:.1f} kg (BR-B02 14.5–16kg).",
+                    "intervention": "Initiate mini-cut: –300 kcal/day, maintain protein."
+                })
+            elif val >= 13.0:
+                alerts.append({
+                    "severity": "medium", "category": "body", "title": "Fat Mass Increasing",
+                    "detail": f"Fat mass is {val:.1f} kg (BR-B02 13–14.5kg).",
+                    "intervention": "Tighten nutrition; ensure caloric surplus not excessive."
                 })
 
-    # ── Training Alerts ──
-
-    if not workouts_df.empty:
-        sorted_workouts = workouts_df.sort_values("day")
-        recent_cutoff = sorted_workouts["day"].max() - pd.Timedelta(days=14)
-        recent_sessions = sorted_workouts[sorted_workouts["day"] >= recent_cutoff]["day"].nunique()
-
-        if recent_sessions < 2:
-            alerts.append({
-                "severity": "medium",
-                "category": "training",
-                "title": "Training Frequency Drop",
-                "detail": f"Only {recent_sessions} training session(s) in the last 14 days.",
-                "intervention": (
-                    "- If recovering from illness/injury, ease back with reduced volume\n"
-                    "- If motivation is low, switch to shorter sessions (even 30 min counts)\n"
-                    "- Consistency matters more than intensity — 3×/week minimum recommended"
-                ),
-            })
-
-        # Volume declining over last 8 weeks
-        weekly_vol = sorted_workouts.groupby("day")["volume"].sum().resample("W").sum()
-        if len(weekly_vol) >= 8:
-            first_4w = weekly_vol.iloc[-8:-4].mean()
-            last_4w = weekly_vol.iloc[-4:].mean()
-            if first_4w > 0 and last_4w < first_4w * 0.7:
+        # BR-B04 | Visceral Fat
+        if "visceral_fat" in latest_body and pd.notna(latest_body["visceral_fat"]):
+            val = latest_body["visceral_fat"]
+            if val > 12:
                 alerts.append({
-                    "severity": "medium",
-                    "category": "training",
-                    "title": "Training Volume Declining",
-                    "detail": f"Weekly volume dropped from ~{first_4w:,.0f} kg to ~{last_4w:,.0f} kg "
-                              f"over the last 8 weeks ({(last_4w/first_4w - 1)*100:+.0f}%).",
-                    "intervention": (
-                        "- If intentional (deload), this is fine — plan to ramp back up\n"
-                        "- If unintentional, review programming — are you progressing or stalling?\n"
-                        "- Check recovery markers (sleep, readiness) — under-recovery limits training capacity"
-                    ),
+                    "severity": "critical", "category": "body", "title": "Critical Visceral Fat",
+                    "detail": f"Visceral fat rating is {val:.0f} (BR-B04 > 12).",
+                    "intervention": "Clinical review; significant metabolic risk."
+                })
+            elif val >= 10:
+                alerts.append({
+                    "severity": "high", "category": "body", "title": "High Visceral Fat",
+                    "detail": f"Visceral fat rating is {val:.0f} (BR-B04 10–12).",
+                    "intervention": "Initiate cut; prioritise visceral fat reduction."
+                })
+            elif val >= 8:
+                alerts.append({
+                    "severity": "medium", "category": "body", "title": "Elevated Visceral Fat",
+                    "detail": f"Visceral fat rating is {val:.0f} (BR-B04 8–9).",
+                    "intervention": "Tighten dietary fat; increase walking volume."
                 })
 
-        # Muscle group imbalance
-        if "muscle_group" in sorted_workouts.columns:
-            group_vol = sorted_workouts.groupby("muscle_group")["volume"].sum()
-            group_vol = group_vol[group_vol > 0].sort_values(ascending=False)
-            if len(group_vol) >= 4:
-                # Check push/pull balance
-                push_groups = ["chest", "shoulders", "triceps"]
-                pull_groups = ["lats", "upper_back", "biceps"]
-                push_vol = group_vol[group_vol.index.isin(push_groups)].sum()
-                pull_vol = group_vol[group_vol.index.isin(pull_groups)].sum()
-                if push_vol > 0 and pull_vol > 0:
-                    ratio = push_vol / pull_vol
-                    if ratio > 1.5:
-                        alerts.append({
-                            "severity": "medium",
-                            "category": "training",
-                            "title": "Push/Pull Imbalance",
-                            "detail": f"Push volume is {ratio:.1f}× pull volume — ideally this should be close to 1:1.",
-                            "intervention": (
-                                "- Add more rowing and pulling movements (cable rows, face pulls, pull-ups)\n"
-                                "- Aim for equal sets of horizontal push and pull per week\n"
-                                "- Imbalance increases shoulder injury risk over time"
-                            ),
-                        })
-                    elif ratio < 0.67:
-                        alerts.append({
-                            "severity": "medium",
-                            "category": "training",
-                            "title": "Pull-Dominant Imbalance",
-                            "detail": f"Pull volume is {1/ratio:.1f}× push volume.",
-                            "intervention": "- Add more pressing movements to balance the ratio\n- Ensure adequate chest and shoulder training",
-                        })
-
-                # Check lower vs upper
-                lower_groups = ["quadriceps", "hamstrings", "glutes", "calves", "adductors", "abductors"]
-                upper_groups = push_groups + pull_groups
-                lower_vol = group_vol[group_vol.index.isin(lower_groups)].sum()
-                upper_vol = group_vol[group_vol.index.isin(upper_groups)].sum()
-                if upper_vol > 0 and lower_vol > 0:
-                    ratio = upper_vol / lower_vol
-                    if ratio > 2.0:
-                        alerts.append({
-                            "severity": "low",
-                            "category": "training",
-                            "title": "Upper-Body Dominant Training",
-                            "detail": f"Upper body volume is {ratio:.1f}× lower body volume.",
-                            "intervention": "- Consider adding a dedicated leg day or extra lower-body compounds\n- Squats, deadlifts, and lunges build a strong foundation",
-                        })
-
-                # Neglected muscle groups (< 3% of total volume)
-                total_vol = group_vol.sum()
-                neglected = [g for g, v in group_vol.items() if v / total_vol < 0.03 and g != "other"]
-                if neglected:
-                    alerts.append({
-                        "severity": "low",
-                        "category": "training",
-                        "title": "Undertrained Muscle Groups",
-                        "detail": f"These groups receive less than 3% of total volume: {', '.join(neglected)}.",
-                        "intervention": f"- Add targeted accessory work for {', '.join(neglected)}\n- Even 2–3 sets per week can prevent imbalances",
-                    })
-
-    # ── Stress Alerts ──
-
-    stress_df = datasets.get("stress", pd.DataFrame())
-    if not stress_df.empty and "stress_high" in stress_df.columns:
-        recent_stress = stress_df.sort_values("day").tail(14)
-        avg_recent_stress = recent_stress["stress_high"].mean()
-        if "recovery_high" in recent_stress.columns:
-            avg_recent_recovery = recent_stress["recovery_high"].mean()
-            if avg_recent_stress > 0 and avg_recent_recovery / avg_recent_stress < 0.5:
+        # BR-B05 | Right Leg Asymmetry
+        if "right_leg_muscle_kg" in latest_body and "left_leg_muscle_kg" in latest_body:
+            diff = abs(latest_body["right_leg_muscle_kg"] - latest_body["left_leg_muscle_kg"])
+            if diff > 0.4:
                 alerts.append({
-                    "severity": "medium",
-                    "category": "sleep",
-                    "title": "Low Recovery-to-Stress Ratio",
-                    "detail": (f"Over the last 14 days, avg high recovery ({avg_recent_recovery:.0f} min) "
-                               f"is less than half of avg high stress ({avg_recent_stress:.0f} min)."),
-                    "intervention": (
-                        "- Schedule deliberate recovery activities (walking, meditation, breathwork)\n"
-                        "- Review sleep hygiene — recovery largely happens during sleep\n"
-                        "- Consider reducing training intensity temporarily if readiness is also declining"
-                    ),
+                    "severity": "critical", "category": "body", "title": "Critical Leg Asymmetry",
+                    "detail": f"Leg asymmetry is {diff:.2f} kg (BR-B05 > 0.4kg).",
+                    "intervention": "Investigate neurological or structural cause."
+                })
+            elif diff >= 0.2:
+                alerts.append({
+                    "severity": "high", "category": "body", "title": "High Leg Asymmetry",
+                    "detail": f"Leg asymmetry is {diff:.2f} kg (BR-B05 0.2–0.4kg).",
+                    "intervention": "Add dedicated unilateral session: extra set right leg per exercise."
+                })
+            elif diff >= 0.1:
+                alerts.append({
+                    "severity": "medium", "category": "body", "title": "Mild Leg Asymmetry",
+                    "detail": f"Leg asymmetry is {diff:.2f} kg (BR-B05 0.1–0.2kg).",
+                    "intervention": "Maintain unilateral priority (right leg first on all exercises)."
                 })
 
-        stress_trend = _recent_trend(stress_df["stress_high"])
-        if stress_trend is not None and stress_trend > 1.0:
-            alerts.append({
-                "severity": "medium",
-                "category": "sleep",
-                "title": "Stress Rapidly Increasing",
-                "detail": f"High stress minutes trending sharply upward over the past 28 days (slope: +{stress_trend:.1f} min/day).",
-                "intervention": (
-                    "- Identify and address stressors (work, sleep debt, overtraining)\n"
-                    "- Increase parasympathetic activity: deep breathing, cold exposure, nature walks\n"
-                    "- Monitor HRV and readiness scores for downstream impact"
-                ),
-            })
-
-    # ── Activity Alerts ──
-
-    if not activity_df.empty:
-        steps_col = next((c for c in ["steps", "total_steps"] if c in activity_df.columns), None)
-        if steps_col:
-            recent_steps = activity_df.sort_values("day").tail(14)
-            avg_recent_steps = recent_steps[steps_col].mean()
-            if avg_recent_steps < 5000:
+        # BR-B07 | Metabolic Age
+        if "metabolic_age" in latest_body and pd.notna(latest_body["metabolic_age"]):
+            val = latest_body["metabolic_age"]
+            if val >= 47:
                 alerts.append({
-                    "severity": "medium",
-                    "category": "sleep",
-                    "title": "Low Daily Movement",
-                    "detail": f"Average steps over the last 14 days: {avg_recent_steps:,.0f} (below 5,000).",
-                    "intervention": (
-                        "- Set a daily step target and use hourly movement reminders\n"
-                        "- Add a 10–15 min walk after meals (improves glucose regulation too)\n"
-                        "- Low NEAT (non-exercise activity) limits fat loss regardless of gym training"
-                    ),
+                    "severity": "critical", "category": "body", "title": "Critical Metabolic Age",
+                    "detail": f"Metabolic age is {val:.0f} (BR-B07 >= 47).",
+                    "intervention": "Clinical review; investigate hormonal or metabolic cause."
+                })
+            elif val >= 43:
+                alerts.append({
+                    "severity": "high", "category": "body", "title": "Poor Metabolic Age",
+                    "detail": f"Metabolic age is {val:.0f} (BR-B07 43–46).",
+                    "intervention": "Full protocol audit — something is regressing."
+                })
+            elif val >= 39:
+                alerts.append({
+                    "severity": "medium", "category": "body", "title": "Elevated Metabolic Age",
+                    "detail": f"Metabolic age is {val:.0f} (BR-B07 39–42).",
+                    "intervention": "Review sleep, stress, training consistency."
                 })
 
-    # ── Cross-Source Alerts ──
+        # BR-B08 | Boditrax Score
+        if "boditrax_score" in latest_body and pd.notna(latest_body["boditrax_score"]):
+            val = latest_body["boditrax_score"]
+            if val < 780:
+                alerts.append({
+                    "severity": "critical", "category": "body", "title": "Critical Boditrax Score",
+                    "detail": f"Boditrax score is {val:.0f} (BR-B08 < 780).",
+                    "intervention": "Significant regression — clinical + protocol review."
+                })
+            elif val < 800:
+                alerts.append({
+                    "severity": "high", "category": "body", "title": "Low Boditrax Score",
+                    "detail": f"Boditrax score is {val:.0f} (BR-B08 780–799).",
+                    "intervention": "Multiple metrics regressing; full protocol review."
+                })
+            elif val < 820:
+                alerts.append({
+                    "severity": "medium", "category": "body", "title": "Suboptimal Boditrax Score",
+                    "detail": f"Boditrax score is {val:.0f} (BR-B08 800–819).",
+                    "intervention": "Solid; review which sub-components are dragging."
+                })
 
-    # Training load → poor recovery pattern
-    if "training_volume_vs_recovery" in correlations:
-        corr = correlations["training_volume_vs_recovery"].get("correlation")
-        if corr is not None and corr < -0.3:
-            alerts.append({
-                "severity": "medium",
-                "category": "correlations",
-                "title": "Heavy Training Hurting Recovery",
-                "detail": f"Strong negative correlation (r={corr:.2f}) between training volume and next-day readiness.",
-                "intervention": (
-                    "- Space heavy sessions 48+ hours apart\n"
-                    "- Add a light recovery day (walking, mobility) after high-volume sessions\n"
-                    "- Ensure post-workout nutrition (protein + carbs within 2 hours)"
-                ),
-            })
+    # ── Domain 5: Body Weight Change ──
 
-    # ── Combined-Metric Alerts ──
+    if not mfp_weight_df.empty:
+        sorted_weight = mfp_weight_df.sort_values("day")
+        if len(sorted_weight) >= 14:
+            recent_avg = sorted_weight.tail(7)["weight_kg"].mean()
+            prev_avg = sorted_weight.tail(14).head(7)["weight_kg"].mean()
+            weekly_change = recent_avg - prev_avg
+            
+            if weekly_change > 0.35:
+                alerts.append({
+                    "severity": "high", "category": "nutrition", "title": "Weight Gain Too Rapid",
+                    "detail": f"Weekly average weight change is +{weekly_change:.2f} kg (BR-W01 > 0.35).",
+                    "intervention": "Reduce 200 kcal immediately; check fat mass at next Boditrax."
+                })
+            elif weekly_change > 0.25:
+                alerts.append({
+                    "severity": "medium", "category": "nutrition", "title": "Fast Weight Gain",
+                    "detail": f"Weekly average weight change is +{weekly_change:.2f} kg (BR-W01 0.25–0.35).",
+                    "intervention": "Reduce 100 kcal; risk of excess fat gain."
+                })
+            elif weekly_change < 0.10:
+                alerts.append({
+                    "severity": "medium", "category": "nutrition", "title": "Slow Weight Gain",
+                    "detail": f"Weekly average weight change is +{weekly_change:.2f} kg (BR-W01 0.10–0.15).",
+                    "intervention": "Add 100 kcal; monitor for 2 more weeks."
+                })
 
-    # Overtraining vs Safe Deload: high volume + declining HRV + low readiness
-    hrv_col = None
+    # ── Domain 6: Training & Recovery ──
+
+    # BR-T03 | HRV
     if not readiness_df.empty:
         hrv_col = next((c for c in ["contributors.hrv_balance", "hrv_balance"] if c in readiness_df.columns), None)
-    if not workouts_df.empty and hrv_col and not readiness_df.empty:
-        recent_readiness = readiness_df.sort_values("day").tail(14)
-        avg_readiness_14d = recent_readiness["score"].mean() if "score" in recent_readiness.columns else None
-        hrv_slope = _recent_trend(readiness_df.sort_values("day")[hrv_col], window=14)
-
-        sorted_workouts_2 = workouts_df.sort_values("day")
-        recent_cutoff_2 = sorted_workouts_2["day"].max() - pd.Timedelta(days=14)
-        recent_vol = sorted_workouts_2[sorted_workouts_2["day"] >= recent_cutoff_2]
-        vol_per_session = recent_vol.groupby("day")["volume"].sum().mean() if not recent_vol.empty else 0
-
-        if avg_readiness_14d and avg_readiness_14d < 65 and hrv_slope is not None and hrv_slope < -0.1 and vol_per_session > 0:
-            alerts.append({
-                "severity": "high",
-                "category": "training",
-                "title": "Overtraining Risk Detected",
-                "detail": (
-                    f"Low readiness ({avg_readiness_14d:.0f} avg), declining HRV, and maintained training volume "
-                    f"({vol_per_session:,.0f} kg/session) — classic overtraining pattern."
-                ),
-                "intervention": (
-                    "- Take an immediate deload: reduce volume by 50% for 5–7 days\n"
-                    "- Prioritise sleep (8+ hours) and nutrition (maintenance calories, high protein)\n"
-                    "- Add rest days between sessions — avoid back-to-back training\n"
-                    "- Resume normal volume only when readiness returns above 70 and HRV stabilises"
-                ),
-            })
-        elif avg_readiness_14d and avg_readiness_14d >= 70 and hrv_slope is not None and hrv_slope >= 0 and vol_per_session > 0:
-            # Check if volume recently dropped (intentional deload) with good recovery markers
-            prev_cutoff = sorted_workouts_2["day"].max() - pd.Timedelta(days=28)
-            prev_vol = sorted_workouts_2[
-                (sorted_workouts_2["day"] >= prev_cutoff) & (sorted_workouts_2["day"] < recent_cutoff_2)
-            ]
-            prev_vol_avg = prev_vol.groupby("day")["volume"].sum().mean() if not prev_vol.empty else 0
-            if prev_vol_avg > 0 and vol_per_session < prev_vol_avg * 0.7:
+        if hrv_col:
+            recent_hrv = readiness_df.sort_values("day").tail(5)[hrv_col].mean()
+            if recent_hrv < 28:
                 alerts.append({
-                    "severity": "positive",
-                    "category": "training",
-                    "title": "Effective Deload in Progress",
-                    "detail": (
-                        f"Volume reduced ({vol_per_session:,.0f} vs {prev_vol_avg:,.0f} kg/session) while "
-                        f"readiness ({avg_readiness_14d:.0f}) and HRV are healthy — recovery is working."
-                    ),
-                    "intervention": (
-                        "- Continue the deload for the planned duration (typically 5–7 days)\n"
-                        "- Ramp volume back up gradually (80% → 100% over 1–2 weeks)"
-                    ),
+                    "severity": "critical", "category": "sleep", "title": "Critical Low HRV",
+                    "detail": f"5-day avg HRV is {recent_hrv:.0f} ms (BR-T03 < 28).",
+                    "intervention": "Skip training; investigate acute cause (illness, injury, stress)."
                 })
-
-    # High protein + high training volume + good sleep = growth conditions
-    if not nutrition_df.empty and not workouts_df.empty and not sleep_df.empty:
-        logged_nutr = nutrition_df[nutrition_df["calories"] > 0] if "calories" in nutrition_df.columns else pd.DataFrame()
-        if not logged_nutr.empty and "protein" in logged_nutr.columns:
-            recent_protein = logged_nutr.sort_values("day").tail(14)["protein"].mean()
-            recent_sleep_avg = sleep_df.sort_values("day").tail(14)["score"].mean() if "score" in sleep_df.columns else 0
-            recent_train_days = workouts_df.sort_values("day").tail(14)["day"].nunique() if not workouts_df.empty else 0
-            latest_weight = None
-            if not body_df.empty and "weight_kg" in body_df.columns:
-                latest_weight = float(body_df.sort_values("day").iloc[-1]["weight_kg"])
-            protein_per_kg = recent_protein / latest_weight if latest_weight else 0
-
-            if protein_per_kg >= 1.6 and recent_sleep_avg >= 75 and recent_train_days >= 3:
+            elif recent_hrv < 35:
                 alerts.append({
-                    "severity": "positive",
-                    "category": "training",
-                    "title": "Optimal Growth Conditions",
-                    "detail": (
-                        f"Protein intake ({protein_per_kg:.1f} g/kg), sleep quality ({recent_sleep_avg:.0f}), "
-                        f"and training frequency ({recent_train_days} sessions/14d) are all in the growth zone."
-                    ),
-                    "intervention": (
-                        "- Maintain current approach — this is the formula for muscle gain\n"
-                        "- Focus on progressive overload to capitalise on recovery capacity"
-                    ),
+                    "severity": "high", "category": "sleep", "title": "Suppressed HRV",
+                    "detail": f"5-day avg HRV is {recent_hrv:.0f} ms (BR-T03 28–35).",
+                    "intervention": "Suppressed — reduce intensity; prioritise recovery."
+                })
+            elif recent_hrv < 40:
+                alerts.append({
+                    "severity": "medium", "category": "sleep", "title": "Low Normal HRV",
+                    "detail": f"5-day avg HRV is {recent_hrv:.0f} ms (BR-T03 35–40).",
+                    "intervention": "At personal baseline — train normally, monitor."
                 })
 
     # ── Sleep Pattern Alerts ──
@@ -1365,15 +1412,14 @@ def compute_alerts(datasets: dict[str, pd.DataFrame], correlations: dict[str, An
                         ),
                     })
 
-        # Sleep regularity — check bedtime variance via timestamp
+        # Sleep regularity
         if "timestamp" in sorted_sleep.columns:
             recent = sorted_sleep.tail(14)
             timestamps = pd.to_datetime(recent["timestamp"], errors="coerce").dropna()
             if len(timestamps) >= 7:
                 bedtimes_hour = timestamps.dt.hour + timestamps.dt.minute / 60
-                # Handle wrap-around midnight (e.g. 23:00 and 01:00 should be close)
                 bedtimes_adj = bedtimes_hour.copy()
-                bedtimes_adj[bedtimes_adj < 12] += 24  # Shift early AM times
+                bedtimes_adj[bedtimes_adj < 12] += 24
                 spread = bedtimes_adj.max() - bedtimes_adj.min()
                 if spread > 2.0:
                     alerts.append({
@@ -1383,7 +1429,6 @@ def compute_alerts(datasets: dict[str, pd.DataFrame], correlations: dict[str, An
                         "detail": f"Bedtime varies by {spread:.1f} hours over the last 14 nights (>2 hour spread).",
                         "intervention": (
                             "- Set a consistent bedtime and wake time — even on weekends\n"
-                            "- Irregular schedules disrupt circadian rhythm and reduce sleep quality\n"
                             "- Use an alarm for bedtime, not just wake-up"
                         ),
                     })
@@ -1693,7 +1738,7 @@ def compute_alerts(datasets: dict[str, pd.DataFrame], correlations: dict[str, An
                     })
 
     # Sort by severity
-    severity_order = {"high": 0, "medium": 1, "low": 2, "positive": 3}
+    severity_order = {"critical": 0, "high": 1, "medium": 2, "low": 3, "positive": 4}
     alerts.sort(key=lambda a: severity_order.get(a["severity"], 99))
 
     return alerts

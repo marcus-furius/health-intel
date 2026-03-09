@@ -1213,19 +1213,121 @@ def forecasts():
     return {"forecasts": results}
 
 
-# Reference ranges for blood work markers
+# Reference ranges for blood work markers based on Dashboard Business Rules
 REFERENCE_RANGES = {
-    "testosterone_nmol": {"low": 15, "optimal_min": 18, "optimal_max": 25.7},
-    "free_testosterone_nmol": {"low": 0.35, "optimal_min": 0.5, "optimal_max": 0.8},
-    "oestradiol_pmol": {"low": 41, "optimal_max": 159, "high": 220},
-    "haematocrit_pct": {"low": 38, "high": 50, "critical": 54},
-    "psa_ug": {"normal_max": 1.4, "high": 4.0},
-    "hdl_mmol": {"low": 1.0, "optimal_min": 1.0, "optimal_max": 2.5},
-    "ldl_mmol": {"normal_max": 3.0},
-    "alt_u": {"normal_max": 50},
-    "egfr_ml": {"low": 60},
-    "tsh_miu": {"low": 0.27, "high": 4.2},
-    "hba1c_mmol": {"low": 20, "high": 42},
+    # Domain 1: Hormonal
+    "testosterone_nmol": {
+        "green": [20, 100],
+        "amber": [15, 20],
+        "red": [12, 15],
+        "critical": [0, 12],
+        "unit": "nmol/l",
+        "label": "Total Testosterone"
+    },
+    "free_testosterone_nmol": {
+        "green": [0.50, 2.0],
+        "amber": [0.40, 0.50],
+        "red": [0.30, 0.40],
+        "critical": [0, 0.30],
+        "unit": "nmol/l",
+        "label": "Free Testosterone"
+    },
+    "oestradiol_pmol": {
+        "green": [100, 150],
+        "amber": [[75, 100], [150, 200]],
+        "red": [[0, 75], [200, 1000]],
+        "unit": "pmol/l",
+        "label": "Oestradiol"
+    },
+    "shbg_nmol": {
+        "green": [18, 30],
+        "amber": [[0, 18], [30, 40]],
+        "red": [40, 200],
+        "unit": "nmol/l",
+        "label": "SHBG"
+    },
+    "prolactin_miu": {
+        "green": [0, 100],
+        "amber": [100, 200],
+        "red": [200, 350],
+        "critical": [350, 5000],
+        "unit": "mIU/l",
+        "label": "Prolactin"
+    },
+    
+    # Domain 2: TRT Safety
+    "psa_ug": {
+        "green": [0, 1.5],
+        "amber": [1.5, 2.5],
+        "red": [2.5, 3.5],
+        "critical": [3.5, 50],
+        "unit": "µg/l",
+        "label": "PSA"
+    },
+    "haematocrit_pct": {
+        "green": [0, 46],
+        "amber": [46, 48],
+        "red": [48, 50],
+        "critical": [50, 70],
+        "unit": "%",
+        "label": "Haematocrit"
+    },
+    "haemoglobin_g": {
+        "green": [0, 155],
+        "amber": [155, 165],
+        "red": [165, 170],
+        "critical": [170, 250],
+        "unit": "g/l",
+        "label": "Haemoglobin"
+    },
+    "egfr_ml": {
+        "green": [90, 300],
+        "amber": [60, 90],
+        "red": [45, 60],
+        "critical": [0, 45],
+        "unit": "ml/min",
+        "label": "eGFR"
+    },
+
+    # Domain 3: Metabolic & Cardiovascular
+    "total_cholesterol_mmol": {
+        "green": [0, 4.5],
+        "amber": [4.5, 5.2],
+        "red": [5.2, 15],
+        "unit": "mmol/l",
+        "label": "Total Cholesterol"
+    },
+    "cholesterol_hdl_ratio": {
+        "green": [0, 3.5],
+        "amber": [3.5, 4.0],
+        "red": [4.0, 5.0],
+        "critical": [5.0, 20],
+        "unit": "ratio",
+        "label": "Total Cholesterol / HDL Ratio"
+    },
+    "hdl_mmol": {
+        "green": [1.2, 5],
+        "amber": [1.0, 1.2],
+        "red": [0.9, 1.0],
+        "critical": [0, 0.9],
+        "unit": "mmol/l",
+        "label": "HDL Cholesterol"
+    },
+    "hba1c_mmol": {
+        "green": [0, 38],
+        "amber": [38, 41],
+        "red": [42, 47],
+        "critical": [48, 200],
+        "unit": "mmol/mol",
+        "label": "HbA1c"
+    },
+    "mcv_fl": {
+        "green": [80, 95],
+        "amber": [95, 100],
+        "red": [100, 150],
+        "unit": "fL",
+        "label": "MCV"
+    }
 }
 
 

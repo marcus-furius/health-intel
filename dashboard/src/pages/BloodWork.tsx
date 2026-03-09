@@ -19,12 +19,22 @@ export default function BloodWork() {
     const range = referenceRanges[marker];
     if (!range) return '#A69F95';
 
-    if (range.critical && value >= range.critical) return chartColors.stress;
-    if (range.high && value > range.high) return chartColors.stress;
-    if (range.low && value < range.low) return chartColors.stress;
-    if (range.normal_max && value > range.high) return chartColors.stress;
+    function inRange(v: number, r: number | number[] | number[][]): boolean {
+      if (Array.isArray(r)) {
+        if (Array.isArray(r[0])) {
+          return (r as number[][]).some(sub => v >= sub[0] && v <= sub[1]);
+        }
+        return v >= r[0] && v <= r[1];
+      }
+      return false;
+    }
+
+    if (range.critical && inRange(value, range.critical)) return '#1A1A1A'; // Critical - Black
+    if (range.red && inRange(value, range.red)) return chartColors.stress; // Red
+    if (range.amber && inRange(value, range.amber)) return chartColors.warning; // Amber
+    if (range.green && inRange(value, range.green)) return chartColors.recovery; // Green
     
-    return chartColors.recovery; // Sage/Normal
+    return '#A69F95';
   }
 
   function getTrend(marker: string) {

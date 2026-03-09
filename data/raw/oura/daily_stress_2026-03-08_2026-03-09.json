@@ -1,0 +1,16 @@
+[
+  {
+    "id": "9c2cdcb3-535d-42be-8567-2533fe0b2ce2",
+    "day": "2026-03-08",
+    "day_summary": "normal",
+    "recovery_high": 3600,
+    "stress_high": 8100
+  },
+  {
+    "id": "50d667cd-6881-45fc-80e1-634f24e2e286",
+    "day": "2026-03-09",
+    "day_summary": null,
+    "recovery_high": 0,
+    "stress_high": 0
+  }
+]

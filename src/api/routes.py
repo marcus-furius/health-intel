@@ -1397,6 +1397,328 @@ def bloodwork_trends():
     }
 
 
+class GoldenPhaseRecommendation(BaseModel):
+    metric: str
+    golden_value: float | None
+    current_value: float | None
+    unit: str
+    target: float | None
+    status: str  # "on_track", "below", "above"
+
+
+class GoldenPhaseResponse(BaseModel):
+    period_start: str
+    period_end: str
+    duration_weeks: int
+    body_comp_change: dict[str, Any]
+    scan_trajectory: list[dict[str, Any]]
+    recommendations: list[GoldenPhaseRecommendation]
+    golden_averages: dict[str, Any]
+    current_averages: dict[str, Any]
+    comparison_periods: list[dict[str, Any]]
+    training_profile: dict[str, Any]
+
+
+@router.get("/golden-phase")
+def golden_phase() -> GoldenPhaseResponse:
+    """Analyse historical data to identify the peak body recomposition period
+    and derive recommended targets for nutrition, training, sleep, and activity."""
+    ds = _get_datasets()
+    body = ds.get("body_composition", pd.DataFrame())
+    nutr = ds.get("nutrition", pd.DataFrame())
+    workouts = ds.get("workouts", pd.DataFrame())
+    sleep = ds.get("sleep", pd.DataFrame())
+    readiness = ds.get("readiness", pd.DataFrame())
+    activity = ds.get("activity", pd.DataFrame())
+    stress = ds.get("stress", pd.DataFrame())
+
+    # ── Identify golden phase via best recomp window ──
+    # Slide a window across body-comp scans and find the period with best
+    # combined muscle gain + fat loss (recomp score).
+    if body.empty or len(body) < 4:
+        return GoldenPhaseResponse(
+            period_start="", period_end="", duration_weeks=0,
+            body_comp_change={}, scan_trajectory=[], recommendations=[],
+            golden_averages={}, current_averages={}, comparison_periods=[],
+            training_profile={},
+        )
+
+    body_sorted = body.sort_values("day").reset_index(drop=True)
+    best_score = -999.0
+    best_start_idx = 0
+    best_end_idx = len(body_sorted) - 1
+    min_scans = 4  # require at least 4 scans in the window
+
+    for i in range(len(body_sorted)):
+        for j in range(i + min_scans - 1, len(body_sorted)):
+            row_i = body_sorted.iloc[i]
+            row_j = body_sorted.iloc[j]
+            muscle_start = row_i.get("muscle_mass_kg")
+            muscle_end = row_j.get("muscle_mass_kg")
+            fat_start = row_i.get("body_fat_pct")
+            fat_end = row_j.get("body_fat_pct")
+            if pd.isna(muscle_start) or pd.isna(muscle_end):
+                continue
+            if pd.isna(fat_start) or pd.isna(fat_end):
+                continue
+            muscle_gain = float(muscle_end - muscle_start)
+            fat_drop = float(fat_start - fat_end)  # positive = good
+            days_span = (row_j["day"] - row_i["day"]).days
+            if days_span < 42:  # require at least 6 weeks
+                continue
+            # Recomp score: muscle gained + fat% lost, normalised per 18 weeks
+            norm_factor = 126.0 / max(days_span, 1)  # 18 weeks = 126 days
+            score = (muscle_gain + fat_drop * 2) * norm_factor
+            if score > best_score:
+                best_score = score
+                best_start_idx = i
+                best_end_idx = j
+
+    start_row = body_sorted.iloc[best_start_idx]
+    end_row = body_sorted.iloc[best_end_idx]
+    gp_start = pd.Timestamp(start_row["day"])
+    gp_end = pd.Timestamp(end_row["day"])
+    duration_weeks = max(1, int((gp_end - gp_start).days / 7))
+
+    # ── Body comp change ──
+    def _safe_float(v: Any) -> float | None:
+        if pd.isna(v):
+            return None
+        return round(float(v), 1)
+
+    body_comp_change: dict[str, Any] = {}
+    for key, label in [
+        ("weight_kg", "Weight"), ("muscle_mass_kg", "Muscle Mass"),
+        ("body_fat_pct", "Body Fat %"), ("visceral_fat", "Visceral Fat"),
+        ("bmr", "BMR"),
+    ]:
+        s = _safe_float(start_row.get(key))
+        e = _safe_float(end_row.get(key))
+        delta = round(e - s, 1) if s is not None and e is not None else None
+        body_comp_change[key] = {"label": label, "start": s, "end": e, "delta": delta}
+
+    # Fat mass (derived)
+    fat_mass_start = _safe_float(start_row.get("fat_mass_kg")) if "fat_mass_kg" in start_row.index else None
+    fat_mass_end = _safe_float(end_row.get("fat_mass_kg")) if "fat_mass_kg" in end_row.index else None
+    if fat_mass_start is not None and fat_mass_end is not None:
+        body_comp_change["fat_mass_kg"] = {
+            "label": "Fat Mass",
+            "start": fat_mass_start,
+            "end": fat_mass_end,
+            "delta": round(fat_mass_end - fat_mass_start, 1),
+        }
+
+    # ── Scan trajectory during golden phase ──
+    gp_scans = body_sorted[
+        (body_sorted["day"] >= gp_start) & (body_sorted["day"] <= gp_end)
+    ]
+    scan_trajectory = []
+    for _, row in gp_scans.iterrows():
+        scan_trajectory.append({
+            "day": row["day"].strftime("%Y-%m-%d") if isinstance(row["day"], pd.Timestamp) else str(row["day"]),
+            "weight_kg": _safe_float(row.get("weight_kg")),
+            "muscle_mass_kg": _safe_float(row.get("muscle_mass_kg")),
+            "body_fat_pct": _safe_float(row.get("body_fat_pct")),
+        })
+
+    # ── Compute golden phase averages ──
+    def _period_avg(df: pd.DataFrame, col: str, start: pd.Timestamp, end: pd.Timestamp) -> float | None:
+        if df.empty or "day" not in df.columns or col not in df.columns:
+            return None
+        subset = df[(df["day"] >= start) & (df["day"] <= end)]
+        vals = subset[col].dropna()
+        if len(vals) < 3:
+            return None
+        return round(float(vals.mean()), 1)
+
+    def _period_count_per_week(df: pd.DataFrame, start: pd.Timestamp, end: pd.Timestamp) -> float | None:
+        """Count distinct workout days per week."""
+        if df.empty or "day" not in df.columns:
+            return None
+        subset = df[(df["day"] >= start) & (df["day"] <= end)]
+        if subset.empty:
+            return None
+        unique_days = subset["day"].nunique()
+        weeks = max(1, (end - start).days / 7)
+        return round(unique_days / weeks, 1)
+
+    # Nutrition (only logged days)
+    nutr_gp = nutr[(nutr["day"] >= gp_start) & (nutr["day"] <= gp_end)] if not nutr.empty and "day" in nutr.columns else pd.DataFrame()
+    nutr_logged = nutr_gp[nutr_gp["calories"] > 0] if not nutr_gp.empty and "calories" in nutr_gp.columns else pd.DataFrame()
+
+    gp_calories = round(float(nutr_logged["calories"].mean()), 0) if not nutr_logged.empty else None
+    gp_protein = round(float(nutr_logged["protein"].mean()), 0) if not nutr_logged.empty and "protein" in nutr_logged.columns else None
+    gp_carbs = round(float(nutr_logged["carbohydrates"].mean()), 0) if not nutr_logged.empty and "carbohydrates" in nutr_logged.columns else None
+    gp_fat = round(float(nutr_logged["fat"].mean()), 0) if not nutr_logged.empty and "fat" in nutr_logged.columns else None
+
+    # Macro split percentages
+    total_macro_cals = ((gp_protein or 0) * 4 + (gp_carbs or 0) * 4 + (gp_fat or 0) * 9) or 1
+    gp_protein_pct = round((gp_protein or 0) * 4 / total_macro_cals * 100) if gp_protein else None
+    gp_carbs_pct = round((gp_carbs or 0) * 4 / total_macro_cals * 100) if gp_carbs else None
+    gp_fat_pct = round((gp_fat or 0) * 9 / total_macro_cals * 100) if gp_fat else None
+
+    # Protein per kg (using golden phase average weight)
+    gp_avg_weight = _safe_float(gp_scans["weight_kg"].mean()) if not gp_scans.empty and "weight_kg" in gp_scans.columns else None
+    gp_protein_per_kg = round(gp_protein / gp_avg_weight, 1) if gp_protein and gp_avg_weight else None
+
+    gp_sleep = _period_avg(sleep, "score", gp_start, gp_end)
+    gp_readiness = _period_avg(readiness, "score", gp_start, gp_end)
+    gp_hrv = _period_avg(readiness, "contributors.hrv_balance", gp_start, gp_end)
+    gp_steps = _period_avg(activity, "steps", gp_start, gp_end)
+    gp_training_freq = _period_count_per_week(workouts, gp_start, gp_end)
+
+    golden_averages: dict[str, Any] = {
+        "calories": gp_calories,
+        "protein_g": gp_protein,
+        "carbs_g": gp_carbs,
+        "fat_g": gp_fat,
+        "protein_pct": gp_protein_pct,
+        "carbs_pct": gp_carbs_pct,
+        "fat_pct": gp_fat_pct,
+        "protein_per_kg": gp_protein_per_kg,
+        "sleep_score": gp_sleep,
+        "readiness_score": gp_readiness,
+        "hrv_balance": gp_hrv,
+        "daily_steps": gp_steps,
+        "training_sessions_per_week": gp_training_freq,
+    }
+
+    # ── Current period averages (last 30 days) ──
+    now = pd.Timestamp.now()
+    cur_start = now - pd.Timedelta(days=30)
+
+    nutr_cur = nutr[(nutr["day"] >= cur_start) & (nutr["day"] <= now)] if not nutr.empty and "day" in nutr.columns else pd.DataFrame()
+    nutr_cur_logged = nutr_cur[nutr_cur["calories"] > 0] if not nutr_cur.empty and "calories" in nutr_cur.columns else pd.DataFrame()
+
+    cur_calories = round(float(nutr_cur_logged["calories"].mean()), 0) if not nutr_cur_logged.empty else None
+    cur_protein = round(float(nutr_cur_logged["protein"].mean()), 0) if not nutr_cur_logged.empty and "protein" in nutr_cur_logged.columns else None
+    cur_carbs = round(float(nutr_cur_logged["carbohydrates"].mean()), 0) if not nutr_cur_logged.empty and "carbohydrates" in nutr_cur_logged.columns else None
+    cur_fat = round(float(nutr_cur_logged["fat"].mean()), 0) if not nutr_cur_logged.empty and "fat" in nutr_cur_logged.columns else None
+
+    cur_sleep = _period_avg(sleep, "score", cur_start, now)
+    cur_readiness = _period_avg(readiness, "score", cur_start, now)
+    cur_hrv = _period_avg(readiness, "contributors.hrv_balance", cur_start, now)
+    cur_steps = _period_avg(activity, "steps", cur_start, now)
+    cur_training_freq = _period_count_per_week(workouts, cur_start, now)
+
+    latest_weight = float(body_sorted.iloc[-1]["weight_kg"]) if "weight_kg" in body_sorted.columns and pd.notna(body_sorted.iloc[-1]["weight_kg"]) else None
+    cur_protein_per_kg = round(cur_protein / latest_weight, 1) if cur_protein and latest_weight else None
+
+    current_averages: dict[str, Any] = {
+        "calories": cur_calories,
+        "protein_g": cur_protein,
+        "carbs_g": cur_carbs,
+        "fat_g": cur_fat,
+        "protein_per_kg": cur_protein_per_kg,
+        "sleep_score": cur_sleep,
+        "readiness_score": cur_readiness,
+        "hrv_balance": cur_hrv,
+        "daily_steps": cur_steps,
+        "training_sessions_per_week": cur_training_freq,
+    }
+
+    # ── Recommendations ──
+    def _rec(metric: str, golden: float | None, current: float | None, unit: str, higher_is_better: bool = True) -> GoldenPhaseRecommendation:
+        if golden is None:
+            return GoldenPhaseRecommendation(metric=metric, golden_value=golden, current_value=current, unit=unit, target=golden, status="unknown")
+        status = "unknown"
+        if current is not None:
+            threshold = golden * 0.05  # 5% tolerance
+            if higher_is_better:
+                status = "on_track" if current >= golden - threshold else "below"
+            else:
+                status = "on_track" if current <= golden + threshold else "above"
+        return GoldenPhaseRecommendation(metric=metric, golden_value=golden, current_value=current, unit=unit, target=golden, status=status)
+
+    recommendations = [
+        _rec("Daily Calories", gp_calories, cur_calories, "kcal"),
+        _rec("Protein", gp_protein, cur_protein, "g"),
+        _rec("Protein/kg", gp_protein_per_kg, cur_protein_per_kg, "g/kg"),
+        _rec("Carbohydrates", gp_carbs, cur_carbs, "g"),
+        _rec("Fat", gp_fat, cur_fat, "g"),
+        _rec("Training Frequency", gp_training_freq, cur_training_freq, "sessions/wk"),
+        _rec("Sleep Score", gp_sleep, cur_sleep, ""),
+        _rec("Readiness Score", gp_readiness, cur_readiness, ""),
+        _rec("HRV Balance", gp_hrv, cur_hrv, ""),
+        _rec("Daily Steps", gp_steps, cur_steps, "steps"),
+    ]
+
+    # ── Training profile during golden phase ──
+    training_profile: dict[str, Any] = {}
+    if not workouts.empty and "day" in workouts.columns:
+        gp_workouts = workouts[(workouts["day"] >= gp_start) & (workouts["day"] <= gp_end)]
+        if not gp_workouts.empty:
+            total_sessions = int(gp_workouts["day"].nunique())
+            training_profile["total_sessions"] = total_sessions
+            training_profile["sessions_per_week"] = gp_training_freq
+
+            # Muscle group distribution
+            if "muscle_group" in gp_workouts.columns and "volume" in gp_workouts.columns:
+                mg_vol = gp_workouts.groupby("muscle_group")["volume"].sum().sort_values(ascending=False)
+                total_vol = mg_vol.sum()
+                training_profile["muscle_groups"] = [
+                    {"group": g, "volume": round(float(v)), "pct": round(float(v / total_vol * 100), 1)}
+                    for g, v in mg_vol.head(10).items()
+                ]
+                training_profile["total_volume"] = round(float(total_vol))
+
+            # Workout titles (split identification)
+            if "workout_title" in gp_workouts.columns:
+                title_counts = gp_workouts.groupby("workout_title")["day"].nunique().sort_values(ascending=False)
+                training_profile["workout_split"] = [
+                    {"name": t, "count": int(c)} for t, c in title_counts.head(6).items()
+                ]
+
+    # ── Comparison periods (quarterly) ──
+    comparison_periods: list[dict[str, Any]] = []
+    if not body_sorted.empty:
+        all_start = body_sorted["day"].min()
+        all_end = body_sorted["day"].max()
+        q_start = all_start
+        while q_start < all_end:
+            q_end = q_start + pd.Timedelta(days=91)  # ~13 weeks
+            if q_end > all_end:
+                q_end = all_end
+            q_scans = body_sorted[(body_sorted["day"] >= q_start) & (body_sorted["day"] <= q_end)]
+            if len(q_scans) >= 2:
+                first_s = q_scans.iloc[0]
+                last_s = q_scans.iloc[-1]
+                muscle_delta = _safe_float(last_s.get("muscle_mass_kg", 0)) - _safe_float(first_s.get("muscle_mass_kg", 0)) if _safe_float(first_s.get("muscle_mass_kg")) and _safe_float(last_s.get("muscle_mass_kg")) else None
+                fat_delta = _safe_float(last_s.get("body_fat_pct", 0)) - _safe_float(first_s.get("body_fat_pct", 0)) if _safe_float(first_s.get("body_fat_pct")) and _safe_float(last_s.get("body_fat_pct")) else None
+                cal_avg = _period_avg(nutr, "calories", q_start, q_end) if not nutr.empty else None
+                prot_avg = _period_avg(nutr, "protein", q_start, q_end) if not nutr.empty else None
+                train_freq = _period_count_per_week(workouts, q_start, q_end)
+                sleep_avg = _period_avg(sleep, "score", q_start, q_end)
+
+                is_golden = (q_start <= gp_start <= q_end) or (q_start <= gp_end <= q_end)
+                comparison_periods.append({
+                    "label": f"{q_start.strftime('%b %Y')} – {q_end.strftime('%b %Y')}",
+                    "start": q_start.strftime("%Y-%m-%d"),
+                    "end": q_end.strftime("%Y-%m-%d"),
+                    "muscle_delta_kg": muscle_delta,
+                    "fat_pct_delta": fat_delta,
+                    "avg_calories": cal_avg,
+                    "avg_protein": prot_avg,
+                    "training_per_week": train_freq,
+                    "sleep_score": sleep_avg,
+                    "is_golden": is_golden,
+                })
+            q_start = q_end + pd.Timedelta(days=1)
+
+    return GoldenPhaseResponse(
+        period_start=gp_start.strftime("%Y-%m-%d"),
+        period_end=gp_end.strftime("%Y-%m-%d"),
+        duration_weeks=duration_weeks,
+        body_comp_change=body_comp_change,
+        scan_trajectory=scan_trajectory,
+        recommendations=recommendations,
+        golden_averages=golden_averages,
+        current_averages=current_averages,
+        comparison_periods=comparison_periods,
+        training_profile=training_profile,
+    )
+
+
 @router.post("/reload")
 def reload_data():
     from src.api.server import load_datasets

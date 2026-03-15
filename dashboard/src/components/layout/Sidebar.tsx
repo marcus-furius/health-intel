@@ -16,6 +16,7 @@ import {
   RefreshCw,
   X,
   Syringe,
+  Trophy,
 } from 'lucide-react';
 import { apiReload } from '../../lib/api.ts';
 
@@ -28,6 +29,7 @@ const links = [
   { to: '/bloodwork', icon: Syringe, label: 'Blood Work' },
   { to: '/correlations', icon: GitCompareArrows, label: 'Correlations' },
   { to: '/alerts', icon: AlertTriangle, label: 'Alerts' },
+  { to: '/golden-phase', icon: Trophy, label: 'Golden Phase' },
   { to: '/digest', icon: CalendarDays, label: 'Weekly Digest' },
 ];
 

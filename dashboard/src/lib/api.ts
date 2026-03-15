@@ -79,3 +79,25 @@ export interface PaginatedResponse<T = Record<string, unknown>> {
   limit: number | null;
   offset: number;
 }
+
+export interface GoldenPhaseRecommendation {
+  metric: string;
+  golden_value: number | null;
+  current_value: number | null;
+  unit: string;
+  target: number | null;
+  status: string;
+}
+
+export interface GoldenPhaseData {
+  period_start: string;
+  period_end: string;
+  duration_weeks: number;
+  body_comp_change: Record<string, { label: string; start: number | null; end: number | null; delta: number | null }>;
+  scan_trajectory: { day: string; weight_kg: number | null; muscle_mass_kg: number | null; body_fat_pct: number | null }[];
+  recommendations: GoldenPhaseRecommendation[];
+  golden_averages: Record<string, number | null>;
+  current_averages: Record<string, number | null>;
+  comparison_periods: Record<string, unknown>[];
+  training_profile: Record<string, unknown>;
+}

@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { apiFetch } from '../lib/api.ts';
-import type { OverviewData, CorrelationsData, AlertOut } from '../lib/api.ts';
+import type { OverviewData, CorrelationsData, AlertOut, GoldenPhaseData } from '../lib/api.ts';
 
 export function useOverview() {
   return useQuery<OverviewData>({
@@ -251,6 +251,14 @@ export function useBloodworkLatest() {
   return useQuery<{ latest: Record<string, any> | null; reference_ranges: Record<string, any> }>({
     queryKey: ['bloodwork-latest'],
     queryFn: () => apiFetch('/bloodwork/latest'),
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+export function useGoldenPhase() {
+  return useQuery<GoldenPhaseData>({
+    queryKey: ['golden-phase'],
+    queryFn: () => apiFetch('/golden-phase'),
     staleTime: 5 * 60 * 1000,
   });
 }

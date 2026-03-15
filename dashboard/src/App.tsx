@@ -16,6 +16,7 @@ const BloodWork = lazy(() => import('./pages/BloodWork.tsx'));
 const Correlations = lazy(() => import('./pages/Correlations.tsx'));
 const Alerts = lazy(() => import('./pages/Alerts.tsx'));
 const Digest = lazy(() => import('./pages/Digest.tsx'));
+const GoldenPhase = lazy(() => import('./pages/GoldenPhase.tsx'));
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -71,6 +72,7 @@ export default function App() {
                 <Route path="/correlations" element={<Correlations />} />
                 <Route path="/alerts" element={<Alerts />} />
                 <Route path="/digest" element={<Digest />} />
+                <Route path="/golden-phase" element={<GoldenPhase />} />
               </Routes>
               </div>
             </Suspense>

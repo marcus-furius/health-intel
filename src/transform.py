@@ -29,7 +29,7 @@ _VALID_RANGES: dict[str, tuple[float, float]] = {
     "stress_high": (0, 1440),
     "recovery_high": (0, 1440),
     # Nutrition
-    "calories": (0, 15_000),
+    "calories": (2000, 15_000),
     "protein": (0, 1000),
     "carbohydrates": (0, 2000),
     "fat": (0, 1000),
@@ -382,6 +382,14 @@ def transform_mfp(raw_dir: Path) -> pd.DataFrame:
     for col in numeric_cols:
         if col in df.columns:
             df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0)
+
+    # Filter out incomplete days (calories < 2000)
+    # These usually represent missed logging or partial data
+    if "calories" in df.columns:
+        before = len(df)
+        df = df[df["calories"] >= 2000].reset_index(drop=True)
+        if len(df) < before:
+            logger.info("Removed %d incomplete nutrition days (calories < 2000)", before - len(df))
 
     df = _dedup_by_day(df)
     df = _validate_ranges(df, "mfp_nutrition")

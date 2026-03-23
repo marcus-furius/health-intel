@@ -279,6 +279,8 @@ def main() -> None:
     logger.info("Successfully created %d routines in Hevy", len(created))
     for r in created:
         routine_data = r.get("routine", r)
+        if isinstance(routine_data, list):
+            routine_data = routine_data[0] if routine_data else {}
         logger.info("  - %s (id: %s)", routine_data.get("title"), routine_data.get("id"))
 
 

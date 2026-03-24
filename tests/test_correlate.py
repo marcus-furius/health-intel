@@ -204,6 +204,45 @@ def test_best_lag_corr_same_column_name():
 # --- compute_correlations result structure ---
 
 
+def test_compute_correlations_training_volume_vs_stress(sample_workouts_df, sample_stress_df):
+    """Workouts + stress data → training_volume_vs_stress key present."""
+    datasets = {
+        "workouts": sample_workouts_df,
+        "stress": sample_stress_df,
+    }
+    result = compute_correlations(datasets)
+    assert "training_volume_vs_stress" in result
+    entry = result["training_volume_vs_stress"]
+    assert entry["lag_days"] == 0
+    assert entry["x_label"] == "Training Volume (kg)"
+    assert entry["y_label"] == "Stress (high mins)"
+
+
+def test_compute_correlations_training_volume_vs_recovery_mins(sample_workouts_df, sample_stress_df):
+    """Workouts + stress data → training_volume_vs_recovery_mins key present."""
+    datasets = {
+        "workouts": sample_workouts_df,
+        "stress": sample_stress_df,
+    }
+    result = compute_correlations(datasets)
+    assert "training_volume_vs_recovery_mins" in result
+    entry = result["training_volume_vs_recovery_mins"]
+    assert entry["lag_days"] == 0
+
+
+def test_compute_correlations_training_intensity_vs_stress(sample_workouts_df, sample_stress_df):
+    """Workouts + stress data → training_intensity_vs_stress key present."""
+    datasets = {
+        "workouts": sample_workouts_df,
+        "stress": sample_stress_df,
+    }
+    result = compute_correlations(datasets)
+    assert "training_intensity_vs_stress" in result
+    entry = result["training_intensity_vs_stress"]
+    assert entry["lag_days"] == 0
+    assert entry["x_label"] == "Max Weight (kg)"
+
+
 def test_compute_correlations_result_structure(sample_sleep_df, sample_readiness_df):
     """Each correlation result should have CI fields."""
     datasets = {"sleep": sample_sleep_df, "readiness": sample_readiness_df}

@@ -315,6 +315,43 @@ def compute_correlations(datasets: dict[str, pd.DataFrame]) -> dict[str, Any]:
                          daily_vol, "volume", "Training Volume (kg)",
                          max_lag=1, rename_x="hrv_balance")
 
+    # --- Training Load → Same-Day Stress ---
+
+    if not daily_vol.empty and not stress_df.empty and "stress_high" in stress_df.columns:
+        # Training Volume → Same-Day Stress (lag=0 only)
+        _add_correlation(results, "training_volume_vs_stress",
+                         daily_vol, "volume", "Training Volume (kg)",
+                         stress_df, "stress_high", "Stress (high mins)",
+                         max_lag=0)
+
+        # Training Volume → Same-Day Recovery Minutes
+        if "recovery_high" in stress_df.columns:
+            _add_correlation(results, "training_volume_vs_recovery_mins",
+                             daily_vol, "volume", "Training Volume (kg)",
+                             stress_df, "recovery_high", "Recovery (high mins)",
+                             max_lag=0)
+
+    # Training Intensity (max weight per day) → Same-Day Stress
+    if not workouts_df.empty and "weight_kg" in workouts_df.columns and \
+       not stress_df.empty and "stress_high" in stress_df.columns:
+        daily_intensity = workouts_df.groupby("day").agg(
+            max_weight=("weight_kg", "max"),
+            avg_weight=("weight_kg", "mean"),
+        ).reset_index()
+
+        _add_correlation(results, "training_intensity_vs_stress",
+                         daily_intensity, "max_weight", "Max Weight (kg)",
+                         stress_df, "stress_high", "Stress (high mins)",
+                         max_lag=0)
+
+    # Training Volume → Same-Day HRV Balance
+    if not daily_vol.empty and not readiness_df.empty and \
+       "contributors.hrv_balance" in readiness_df.columns:
+        _add_correlation(results, "training_volume_vs_hrv",
+                         daily_vol, "volume", "Training Volume (kg)",
+                         readiness_df, "contributors.hrv_balance", "HRV Balance",
+                         max_lag=0, rename_y="hrv_balance")
+
     # --- Body Composition Correlations ---
 
     # Body Fat % → Resting Heart Rate

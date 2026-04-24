@@ -19,6 +19,16 @@ export async function apiReload(): Promise<{ status: string; datasets: string[] 
   return res.json();
 }
 
+export async function apiPost<T>(path: string, body: unknown): Promise<T> {
+  const res = await fetch(`${BASE}${path}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) throw new Error(`API error: ${res.status}`);
+  return res.json();
+}
+
 // Types matching API response models
 
 export interface SparkPoint {
@@ -100,4 +110,56 @@ export interface GoldenPhaseData {
   current_averages: Record<string, number | null>;
   comparison_periods: Record<string, unknown>[];
   training_profile: Record<string, unknown>;
+}
+
+export interface DomainComponent {
+  name: string;
+  score: number;
+  weight: number;
+  detail?: string | null;
+}
+
+export interface DomainScore {
+  name: string;
+  label: string;
+  score: number;
+  trend: string;
+  available: boolean;
+  components: DomainComponent[];
+  key_metric?: string | null;
+}
+
+export interface ScreeningIntervention {
+  priority: number;
+  domain: string;
+  action: string;
+  expected_impact: string;
+}
+
+export interface Vo2MaxClassification {
+  value: number;
+  category: string;
+  score: number;
+}
+
+export interface Vo2MaxEntry {
+  date: string;
+  value: number;
+  method: string;
+}
+
+export interface HealthScreeningData {
+  overall_score: number;
+  overall_trend: string;
+  data_completeness: number;
+  domains: DomainScore[];
+  risk_factors: AlertOut[];
+  interventions: ScreeningIntervention[];
+  vo2max: Vo2MaxClassification | null;
+  vo2max_history: Vo2MaxEntry[];
+}
+
+export interface Vo2MaxData {
+  entries: Vo2MaxEntry[];
+  classification: Vo2MaxClassification | null;
 }

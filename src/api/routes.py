@@ -10,6 +10,12 @@ from pydantic import BaseModel
 
 from src.correlate import compute_correlations
 from src.report import _corr_strength, _recent_trend, compute_alerts
+from src.screening import (
+    add_vo2max_entry,
+    classify_vo2max,
+    compute_health_screening,
+    load_vo2max,
+)
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -68,6 +74,53 @@ class CorrelationItem(BaseModel):
 
 class CorrelationsResponse(BaseModel):
     correlations: list[CorrelationItem]
+
+
+class Vo2MaxEntryIn(BaseModel):
+    date: str
+    value: float
+    method: str = "manual"
+
+
+class DomainComponent(BaseModel):
+    name: str
+    score: float
+    weight: float
+    detail: str | None = None
+
+
+class DomainScore(BaseModel):
+    name: str
+    label: str
+    score: float
+    trend: str
+    available: bool
+    components: list[DomainComponent]
+    key_metric: str | None = None
+
+
+class ScreeningIntervention(BaseModel):
+    priority: int
+    domain: str
+    action: str
+    expected_impact: str
+
+
+class Vo2MaxClassification(BaseModel):
+    value: float
+    category: str
+    score: float
+
+
+class HealthScreeningResponse(BaseModel):
+    overall_score: float
+    overall_trend: str
+    data_completeness: float
+    domains: list[DomainScore]
+    risk_factors: list[AlertOut]
+    interventions: list[ScreeningIntervention]
+    vo2max: Vo2MaxClassification | None
+    vo2max_history: list[dict[str, Any]]
 
 
 # ── Helpers ──
@@ -1717,6 +1770,34 @@ def golden_phase() -> GoldenPhaseResponse:
         comparison_periods=comparison_periods,
         training_profile=training_profile,
     )
+
+
+@router.get("/vo2max")
+def vo2max_data():
+    entries = load_vo2max()
+    classification = None
+    if entries:
+        classification = classify_vo2max(entries[-1]["value"])
+    return {"entries": entries, "classification": classification}
+
+
+@router.post("/vo2max")
+def add_vo2max(entry: Vo2MaxEntryIn):
+    entries = add_vo2max_entry(entry.date, entry.value, entry.method)
+    # Update in-memory dataset
+    import src.api.server as server_mod
+    df = pd.DataFrame(entries)
+    df["day"] = pd.to_datetime(df["date"])
+    server_mod.datasets["vo2max"] = df
+    classification = classify_vo2max(entry.value)
+    return {"entries": entries, "classification": classification}
+
+
+@router.get("/health-screening", response_model=HealthScreeningResponse)
+def health_screening():
+    ds = _get_datasets()
+    result = compute_health_screening(ds)
+    return result
 
 
 @router.post("/reload")

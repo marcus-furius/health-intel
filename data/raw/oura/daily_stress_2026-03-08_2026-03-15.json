@@ -1,0 +1,58 @@
+[
+  {
+    "id": "9c2cdcb3-535d-42be-8567-2533fe0b2ce2",
+    "day": "2026-03-08",
+    "day_summary": "normal",
+    "recovery_high": 3600,
+    "stress_high": 8100
+  },
+  {
+    "id": "50d667cd-6881-45fc-80e1-634f24e2e286",
+    "day": "2026-03-09",
+    "day_summary": "normal",
+    "recovery_high": 7200,
+    "stress_high": 900
+  },
+  {
+    "id": "51ab2e9c-1880-45f2-9f44-efaa307c1297",
+    "day": "2026-03-10",
+    "day_summary": "normal",
+    "recovery_high": 3600,
+    "stress_high": 900
+  },
+  {
+    "id": "8ac5ed45-42e4-4ce5-9f0b-c8cf634d172d",
+    "day": "2026-03-11",
+    "day_summary": "normal",
+    "recovery_high": 900,
+    "stress_high": 3600
+  },
+  {
+    "id": "c6d9c0a1-b4ea-4cf5-b4b4-046d1085b3b8",
+    "day": "2026-03-12",
+    "day_summary": "normal",
+    "recovery_high": 5400,
+    "stress_high": 5400
+  },
+  {
+    "id": "56950ab8-a523-42d0-bf01-9a178f3abb74",
+    "day": "2026-03-13",
+    "day_summary": "normal",
+    "recovery_high": 900,
+    "stress_high": 900
+  },
+  {
+    "id": "8eaa8c9e-65d0-4ff3-81f6-41df1c9a59d5",
+    "day": "2026-03-14",
+    "day_summary": "restored",
+    "recovery_high": 8100,
+    "stress_high": 900
+  },
+  {
+    "id": "3d3e1961-773d-4440-b0f0-b82082786dff",
+    "day": "2026-03-15",
+    "day_summary": "normal",
+    "recovery_high": 3600,
+    "stress_high": 900
+  }
+]

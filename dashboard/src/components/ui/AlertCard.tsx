@@ -18,6 +18,8 @@ const categoryRoutes: Record<string, string> = {
   nutrition: '/nutrition',
   activity: '/',
   correlations: '/correlations',
+  bloodwork: '/bloodwork',
+  screening: '/screening',
 };
 
 interface Props {

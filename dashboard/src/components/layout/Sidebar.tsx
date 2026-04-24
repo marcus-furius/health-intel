@@ -17,6 +17,7 @@ import {
   X,
   Syringe,
   Trophy,
+  HeartPulse,
 } from 'lucide-react';
 import { apiReload } from '../../lib/api.ts';
 
@@ -27,6 +28,7 @@ const links = [
   { to: '/nutrition', icon: Apple, label: 'Nutrition' },
   { to: '/body', icon: Scale, label: 'Body Composition' },
   { to: '/bloodwork', icon: Syringe, label: 'Blood Work' },
+  { to: '/screening', icon: HeartPulse, label: 'Health Screening' },
   { to: '/correlations', icon: GitCompareArrows, label: 'Correlations' },
   { to: '/alerts', icon: AlertTriangle, label: 'Alerts' },
   { to: '/golden-phase', icon: Trophy, label: 'Golden Phase' },

@@ -1,6 +1,6 @@
-import { useQuery } from '@tanstack/react-query';
-import { apiFetch } from '../lib/api.ts';
-import type { OverviewData, CorrelationsData, AlertOut, GoldenPhaseData } from '../lib/api.ts';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { apiFetch, apiPost } from '../lib/api.ts';
+import type { OverviewData, CorrelationsData, AlertOut, GoldenPhaseData, HealthScreeningData, Vo2MaxData } from '../lib/api.ts';
 
 export function useOverview() {
   return useQuery<OverviewData>({
@@ -268,5 +268,33 @@ export function useBloodworkTrends() {
     queryKey: ['bloodwork-trends'],
     queryFn: () => apiFetch('/bloodwork/trends'),
     staleTime: 5 * 60 * 1000,
+  });
+}
+
+export function useHealthScreening() {
+  return useQuery<HealthScreeningData>({
+    queryKey: ['health-screening'],
+    queryFn: () => apiFetch('/health-screening'),
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+export function useVo2Max() {
+  return useQuery<Vo2MaxData>({
+    queryKey: ['vo2max'],
+    queryFn: () => apiFetch('/vo2max'),
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+export function useAddVo2Max() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (entry: { date: string; value: number; method?: string }) =>
+      apiPost<Vo2MaxData>('/vo2max', entry),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['vo2max'] });
+      queryClient.invalidateQueries({ queryKey: ['health-screening'] });
+    },
   });
 }

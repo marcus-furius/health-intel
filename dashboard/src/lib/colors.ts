@@ -27,3 +27,13 @@ export const severityColors: Record<string, string> = {
   low: colors.steel,
   positive: colors.sage,
 };
+
+export const domainColors: Record<string, string> = {
+  cardiovascular: colors.rose,
+  body_composition: colors.terracotta,
+  sleep_recovery: colors.gold,
+  training: colors.violet,
+  nutrition: colors.teal,
+  metabolic: colors.steel,
+  hormonal: colors.sage,
+};

@@ -1,5 +1,6 @@
 """FastAPI server — loads processed CSVs at startup and serves JSON."""
 
+import json
 import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -50,6 +51,16 @@ def load_datasets() -> dict[str, pd.DataFrame]:
     if hr_path.exists():
         loaded["heartrate"] = pd.read_parquet(hr_path)
         logger.info("Loaded heartrate: %d rows", len(loaded["heartrate"]))
+
+    # VO2 Max as JSON
+    vo2max_path = DATA_DIR / "vo2max.json"
+    if vo2max_path.exists():
+        vo2max_data = json.loads(vo2max_path.read_text())
+        if isinstance(vo2max_data, list) and vo2max_data:
+            df = pd.DataFrame(vo2max_data)
+            df["day"] = pd.to_datetime(df["date"])
+            loaded["vo2max"] = df
+            logger.info("Loaded vo2max: %d entries", len(df))
 
     return loaded
 

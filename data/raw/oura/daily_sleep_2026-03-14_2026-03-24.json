@@ -1,0 +1,107 @@
+[
+  {
+    "id": "44dabe08-d70b-4c9b-9118-0a216598b526",
+    "contributors": {
+      "deep_sleep": 97,
+      "efficiency": 98,
+      "latency": 81,
+      "rem_sleep": 96,
+      "restfulness": 85,
+      "timing": 98,
+      "total_sleep": 97
+    },
+    "day": "2026-03-14",
+    "score": 94,
+    "timestamp": "2026-03-14T00:00:00.000+00:00"
+  },
+  {
+    "id": "cc3b6a32-0da8-4559-8937-aff4b7b92581",
+    "contributors": {
+      "deep_sleep": 97,
+      "efficiency": 99,
+      "latency": 81,
+      "rem_sleep": 86,
+      "restfulness": 86,
+      "timing": 100,
+      "total_sleep": 87
+    },
+    "day": "2026-03-15",
+    "score": 90,
+    "timestamp": "2026-03-15T00:00:00.000+00:00"
+  },
+  {
+    "id": "aeb17445-2bb0-482e-ac30-0d1ca1f5d7b2",
+    "contributors": {
+      "deep_sleep": 97,
+      "efficiency": 99,
+      "latency": 81,
+      "rem_sleep": 97,
+      "restfulness": 83,
+      "timing": 100,
+      "total_sleep": 84
+    },
+    "day": "2026-03-17",
+    "score": 89,
+    "timestamp": "2026-03-17T00:00:00.000+00:00"
+  },
+  {
+    "id": "0869d344-0b5c-452a-af04-041dcbbafb08",
+    "contributors": {
+      "deep_sleep": 96,
+      "efficiency": 97,
+      "latency": 70,
+      "rem_sleep": 91,
+      "restfulness": 77,
+      "timing": 100,
+      "total_sleep": 76
+    },
+    "day": "2026-03-19",
+    "score": 84,
+    "timestamp": "2026-03-19T00:00:00.000+00:00"
+  },
+  {
+    "id": "fdbb1c5a-02bb-44ee-80f7-ee3d7c883549",
+    "contributors": {
+      "deep_sleep": 98,
+      "efficiency": 86,
+      "latency": 70,
+      "rem_sleep": 67,
+      "restfulness": 68,
+      "timing": 75,
+      "total_sleep": 64
+    },
+    "day": "2026-03-22",
+    "score": 72,
+    "timestamp": "2026-03-22T00:00:00.000+00:00"
+  },
+  {
+    "id": "b4582c10-200f-4da7-8e07-09b19bd11559",
+    "contributors": {
+      "deep_sleep": 96,
+      "efficiency": 99,
+      "latency": 78,
+      "rem_sleep": 99,
+      "restfulness": 85,
+      "timing": 100,
+      "total_sleep": 88
+    },
+    "day": "2026-03-23",
+    "score": 91,
+    "timestamp": "2026-03-23T00:00:00.000+00:00"
+  },
+  {
+    "id": "67ebc2ce-edbe-4999-b936-661a244358fd",
+    "contributors": {
+      "deep_sleep": 91,
+      "efficiency": 100,
+      "latency": 75,
+      "rem_sleep": 96,
+      "restfulness": 79,
+      "timing": 100,
+      "total_sleep": 84
+    },
+    "day": "2026-03-24",
+    "score": 87,
+    "timestamp": "2026-03-24T00:00:00.000+00:00"
+  }
+]

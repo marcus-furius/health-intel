@@ -7,3 +7,7 @@ pytest
 httpx
 fastapi
 uvicorn[standard]
+jupyter
+scipy
+seaborn
+statsmodels

@@ -1,12 +1,12 @@
 {
   "source": "hevy",
-  "last_sync": "2026-04-24T11:13:55.701665",
-  "start_date": "2026-03-23",
-  "end_date": "2026-04-24",
+  "last_sync": "2026-05-09T12:56:39.067579",
+  "start_date": "2026-04-23",
+  "end_date": "2026-05-09",
   "record_counts": {
-    "workouts": 12,
-    "exercise_templates": 429
+    "workouts": 8,
+    "exercise_templates": 433
   },
-  "last_sync_date": "2026-04-24",
-  "last_sync_at": "2026-04-24T11:13:55.702033"
+  "last_sync_date": "2026-05-09",
+  "last_sync_at": "2026-05-09T12:56:39.069272"
 }

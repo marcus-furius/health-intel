@@ -1,11 +1,11 @@
 {
   "source": "boditrax",
-  "last_sync": "2026-04-24T11:13:55.734791",
-  "start_date": "2025-04-24",
-  "end_date": "2026-04-24",
+  "last_sync": "2026-05-09T12:56:39.189646",
+  "start_date": "2025-01-01",
+  "end_date": "2026-05-09",
   "record_counts": {
-    "scans": 34
+    "scans": 50
   },
-  "last_sync_date": "2026-04-24",
-  "last_sync_at": "2026-04-24T11:13:55.734982"
+  "last_sync_date": "2026-05-09",
+  "last_sync_at": "2026-05-09T12:56:39.190021"
 }

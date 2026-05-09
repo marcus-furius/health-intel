@@ -1,0 +1,138 @@
+[
+  {
+    "id": "c5e7037e-7f76-4590-92ed-4980ea173057",
+    "breathing_disturbance_index": 0,
+    "day": "2026-04-23",
+    "spo2_percentage": {
+      "average": 98.0
+    }
+  },
+  {
+    "id": "1a596472-6959-427d-8814-b8dd7bb9edba",
+    "breathing_disturbance_index": 8,
+    "day": "2026-04-24",
+    "spo2_percentage": {
+      "average": 96.947
+    }
+  },
+  {
+    "id": "24279ec4-7655-4a23-ba7e-39ee093ce8f5",
+    "breathing_disturbance_index": 12,
+    "day": "2026-04-25",
+    "spo2_percentage": {
+      "average": 96.91
+    }
+  },
+  {
+    "id": "a1bea97a-70f9-4271-9c9b-f22e9df6ed16",
+    "breathing_disturbance_index": 4,
+    "day": "2026-04-26",
+    "spo2_percentage": {
+      "average": 97.531
+    }
+  },
+  {
+    "id": "0d04e242-a0a2-4964-b36d-d3eabb5a689b",
+    "breathing_disturbance_index": 5,
+    "day": "2026-04-27",
+    "spo2_percentage": {
+      "average": 95.715
+    }
+  },
+  {
+    "id": "cd3e9e87-4c74-4352-b2e7-ce0dc7920a12",
+    "breathing_disturbance_index": 6,
+    "day": "2026-04-28",
+    "spo2_percentage": {
+      "average": 96.609
+    }
+  },
+  {
+    "id": "bd6a8ac0-364a-41d4-9aea-122350b3754f",
+    "breathing_disturbance_index": 2,
+    "day": "2026-04-29",
+    "spo2_percentage": {
+      "average": 95.292
+    }
+  },
+  {
+    "id": "40b995ed-0845-4cfa-a5f4-2adbc17fce92",
+    "breathing_disturbance_index": 6,
+    "day": "2026-04-30",
+    "spo2_percentage": {
+      "average": 0.0
+    }
+  },
+  {
+    "id": "b412c4ff-9f9f-4599-b027-74a088053aae",
+    "breathing_disturbance_index": 4,
+    "day": "2026-05-01",
+    "spo2_percentage": {
+      "average": 96.767
+    }
+  },
+  {
+    "id": "5531d946-8b0a-48ed-a6ed-f2abec533d2b",
+    "breathing_disturbance_index": 1,
+    "day": "2026-05-02",
+    "spo2_percentage": {
+      "average": 96.875
+    }
+  },
+  {
+    "id": "755239f0-033d-4a05-a4ad-11df9d78bba8",
+    "breathing_disturbance_index": 4,
+    "day": "2026-05-03",
+    "spo2_percentage": {
+      "average": 95.125
+    }
+  },
+  {
+    "id": "c55b5fe1-fb29-4687-a9f1-1173c51e8c59",
+    "breathing_disturbance_index": 0,
+    "day": "2026-05-04",
+    "spo2_percentage": {
+      "average": 95.563
+    }
+  },
+  {
+    "id": "660bb6be-bd2e-40b5-b42d-8b840266a367",
+    "breathing_disturbance_index": 9,
+    "day": "2026-05-05",
+    "spo2_percentage": {
+      "average": 97.701
+    }
+  },
+  {
+    "id": "1f95bb13-6008-43db-987d-9abd73192a72",
+    "breathing_disturbance_index": 6,
+    "day": "2026-05-06",
+    "spo2_percentage": {
+      "average": 96.682
+    }
+  },
+  {
+    "id": "3dfa7453-e342-4f81-95c4-f36679964847",
+    "breathing_disturbance_index": 3,
+    "day": "2026-05-07",
+    "spo2_percentage": {
+      "average": 95.205
+    }
+  },
+  {
+    "id": "d4626f1b-5ae9-434f-9578-15122464047f",
+    "breathing_disturbance_index": 8,
+    "day": "2026-05-08",
+    "spo2_percentage": {
+      "average": 97.488
+    }
+  },
+  {
+    "id": "69d74e51-3e35-441f-9678-10dbb2763875",
+    "breathing_disturbance_index": 9,
+    "day": "2026-05-09",
+    "spo2_percentage": {
+      "average": 96.307
+    }
+  }
+]

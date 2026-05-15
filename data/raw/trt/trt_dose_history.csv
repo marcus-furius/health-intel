@@ -1,9 +1,13 @@
-date,event_type,prescribed_ml,actual_ml,prescribed_mg_cypionate_weekly,actual_mg_cypionate_weekly,prescribed_mg_active_T_weekly,actual_mg_active_T_weekly,frequency,hcg_ml,tadalafil_mg,blood_total_T_nmol,blood_free_T_nmol,blood_SHBG_nmol,blood_oestradiol_pmol,blood_status,notes
-2025-02-15,initial_prescription,0.20,0.20,80.0,80.0,56.0,56.0,twice_weekly_Mon_Thu,0.15,5,,,,,,Initial TRT prescription
-2025-05-13,plan_change,0.23,0.23,92.0,92.0,64.4,64.4,twice_weekly_Mon_Thu,0.15,5,,,,,,Dose increased to 0.23ml twice weekly (3-month review)
-2025-08-06,blood_test,0.23,0.23,92.0,92.0,64.4,64.4,twice_weekly_Mon_Thu,0.15,5,19.0,0.474,23.2,117,Normal,Total T at peak; SHBG within range
-2025-08-26,plan_change,0.26,0.28,104.0,112.0,72.8,78.4,twice_weekly_Mon_Thu,0.15,5,,,,,,Plan change to 0.26ml; misread email and dosed 0.28ml
-2026-02-09,blood_test,0.26,0.28,104.0,112.0,72.8,78.4,twice_weekly_Mon_Thu,0.15,5,17.7,0.449,22.5,86.8,Low,T declining despite higher actual dose
-2026-02-18,plan_reconfirmed,0.26,0.28,104.0,112.0,72.8,78.4,twice_weekly_Mon_Thu,0.15,5,,,,,,Manual reconfirmed 0.26ml; disclosed misread; declined reduction; continued at 0.28ml
-2026-05-07,blood_test,0.26,0.28,104.0,112.0,72.8,78.4,twice_weekly_Mon_Thu,0.15,5,12.7,0.251,32.1,95.1,Low,T crashed; SHBG surged after cofactor stack stopped
-2026-05-09,current_state,0.26,0.26,104.0,112.0,72.8,78.4,twice_weekly_Mon_Thu,0.15,5,,,,,,Current state ahead of next consultation
+date,event_type,prescribed_ml,actual_ml,prescribed_mg_cypionate_weekly,actual_mg_cypionate_weekly,prescribed_mg_active_T_weekly,actual_mg_active_T_weekly,frequency,route_testosterone,route_hcg,hcg_ml,tadalafil_mg,blood_total_T_nmol,blood_free_T_nmol,blood_SHBG_nmol,blood_oestradiol_pmol,blood_status,notes
+2025-01-29,baseline_blood_test,,,,,,,,,,,,8.12,0.167,28.6,38.6,Baseline,Pre-TRT baseline; symptomatic low T motivating prescription
+2025-02-15,initial_prescription,0.20,0.20,80.0,80.0,56.0,56.0,twice_weekly_Mon_Thu,sub-cutaneous,sub-cutaneous,0.15,5,,,,,,Initial TRT prescription
+2025-04-03,blood_test,0.20,0.20,80.0,80.0,56.0,56.0,twice_weekly_Mon_Thu,sub-cutaneous,sub-cutaneous,0.15,5,17.9,0.285,33.8,135.0,,~6 weeks on 0.20ml; oestradiol elevated at 135 pmol/L
+2025-05-08,blood_test,0.20,0.20,80.0,80.0,56.0,56.0,twice_weekly_Mon_Thu,sub-cutaneous,sub-cutaneous,0.15,5,14.3,0.337,23.2,75.0,,End of 0.20ml phase immediately before dose increase to 0.23ml
+2025-05-13,plan_change,0.23,0.23,92.0,92.0,64.4,64.4,twice_weekly_Mon_Thu,sub-cutaneous,sub-cutaneous,0.15,5,,,,,,Dose increased to 0.23ml twice weekly (3-month review)
+2025-08-06,blood_test,0.23,0.23,92.0,92.0,64.4,64.4,twice_weekly_Mon_Thu,sub-cutaneous,sub-cutaneous,0.15,5,19.0,0.474,23.2,117,Normal,Total T at peak; SHBG within range
+2025-08-26,plan_change,0.26,0.28,104.0,112.0,72.8,78.4,twice_weekly_Mon_Thu,sub-cutaneous,sub-cutaneous,0.15,5,,,,,,Plan change to 0.26ml; misread email and dosed 0.28ml
+2026-02-12,blood_test,0.26,0.28,104.0,112.0,72.8,78.4,twice_weekly_Mon_Thu,sub-cutaneous,sub-cutaneous,0.15,5,17.7,0.449,22.5,86.8,Low,T declining despite higher actual dose (date corrected from 2026-02-09)
+2026-02-18,plan_reconfirmed,0.26,0.28,104.0,112.0,72.8,78.4,twice_weekly_Mon_Thu,sub-cutaneous,sub-cutaneous,0.15,5,,,,,,Manual reconfirmed 0.26ml; disclosed misread; declined reduction; continued at 0.28ml
+2026-05-03,blood_test,0.26,0.28,104.0,112.0,72.8,78.4,twice_weekly_Mon_Thu,sub-cutaneous,sub-cutaneous,0.15,5,12.7,0.251,32.1,95.1,Low,T crashed; SHBG surged after cofactor stack stopped (date corrected from 2026-05-07)
+2026-05-09,current_state,0.26,0.26,104.0,112.0,72.8,78.4,twice_weekly_Mon_Thu,sub-cutaneous,sub-cutaneous,0.15,5,,,,,,Current state ahead of next consultation
+2026-05-13,plan_change,0.26,0.26,104.0,104.0,72.8,72.8,twice_weekly_Mon_Thu,intramuscular,sub-cutaneous,0.15,5,,,,,,Route changed from sub-cutaneous to intramuscular for testosterone cypionate; HCG remains subcutaneous; repeat finger-prick blood test in 4 weeks

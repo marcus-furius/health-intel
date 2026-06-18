@@ -1,11 +1,6 @@
 {
-  "last_pulled": "2026-05-09T12:56:39.191496",
+  "last_pulled": "2026-06-18T18:46:05.025785",
   "start_date": "2025-01-29",
-  "end_date": "2026-05-03",
-  "record_count": 6,
-  "last_sync_date": "2026-05-09",
-  "last_sync_at": "2026-05-09T12:56:39.192194",
-  "record_counts": {
-    "results": 6
-  }
+  "end_date": "2026-06-16",
+  "record_count": 7
 }

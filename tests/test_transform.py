@@ -309,6 +309,30 @@ def test_transform_boditrax_empty(tmp_path):
     assert df.empty
 
 
+def test_transform_boditrax_phase_angle_sign_normalised(tmp_path):
+    """Boditrax exports phase angle as negative; it should be stored positive
+    and survive the (0, 20) range validator instead of being nulled."""
+    bt_dir = tmp_path / "boditrax"
+    bt_dir.mkdir(parents=True, exist_ok=True)
+
+    native = (
+        "User Details\n"
+        "Email,FirstName LastName,DateOfBirth,Gender\n"
+        "a@b.com,Test,1/1/1980 12:00:00 AM,Male\n"
+        "User Scan Details\n"
+        "BodyMetricTypeId,Value,CreatedDate\n"
+        "BodyWeight,87.7,6/19/2026 9:49:22 AM\n"
+        "PhaseAngleRightArm,-6.8,6/19/2026 9:49:22 AM\n"
+        "PhaseAngleLeftArm,-6.4,6/19/2026 9:49:22 AM\n"
+    )
+    (bt_dir / "BoditraxAccount_20260620_152725.csv").write_text(native)
+
+    df = transform_boditrax(tmp_path)
+    assert len(df) == 1
+    assert df["phase_angle_right_arm"].iloc[0] == pytest.approx(6.8)
+    assert df["phase_angle_left_arm"].iloc[0] == pytest.approx(6.4)
+
+
 # --- MFP transforms ---
 
 

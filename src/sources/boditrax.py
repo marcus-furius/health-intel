@@ -147,6 +147,12 @@ class BoditraxSource:
         raw_df["metric"] = raw_df["metric"].map(METRIC_MAP)
         raw_df = raw_df.dropna(subset=["metric"])
 
+        # Boditrax exports phase angle with a negative sign convention; phase angle
+        # is physically a positive quantity (~4-8 deg). Normalise to absolute value
+        # so downstream interpretation (higher = better cellular health) holds.
+        phase_mask = raw_df["metric"].str.startswith("phase_angle")
+        raw_df.loc[phase_mask, "value"] = raw_df.loc[phase_mask, "value"].abs()
+
         raw_df["created_date"] = pd.to_datetime(raw_df["created_date"], format="mixed", dayfirst=False)
         raw_df["date"] = raw_df["created_date"].dt.strftime("%Y-%m-%d")
 
